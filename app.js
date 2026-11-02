@@ -215,7 +215,7 @@ window.handleLogin = async function(e) {
     }
 };
 
-// Registro con Envío de Correo de Verificación y Creación Limpia del Espacio Personal
+// Registro con Envío de Correo de Verificación y Cierre Inmediato de Sesión
 window.handleRegister = async function(e) {
     if (e) e.preventDefault();
     const emailEl = document.getElementById('registerEmail');
@@ -233,9 +233,10 @@ window.handleRegister = async function(e) {
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         const user = userCredential.user;
 
-        // Enviar correo de verificación nativo de Firebase
+        // 1. Enviar correo de verificación nativo de Firebase
         await sendEmailVerification(user);
 
+        // 2. Crear su Espacio Personal en Firestore
         const personalDocId = `personal_${user.uid}`;
         const personalDocRef = doc(db, "app_data", personalDocId);
 
@@ -246,7 +247,10 @@ window.handleRegister = async function(e) {
             creadoEl: new Date().toISOString()
         });
 
-        alert("¡Cuenta creada con éxito! Te hemos enviado un correo de verificación. Por favor revisá tu bandeja de entrada.");
+        // 3. Cerrar sesión por seguridad hasta que verifique el mail
+        await signOut(auth);
+
+        alert("¡Cuenta creada con éxito! Te hemos enviado un correo de verificación. Por favor confirma tu casilla antes de iniciar sesión.");
         window.showLogin();
     } catch (error) {
         console.error("Error al registrar usuario:", error);
@@ -288,7 +292,6 @@ window.cambiarVistaSeleccionada = async function(vistaId) {
                 window.appState = { ...window.appState, ...data.appState };
             }
         } else {
-            // Si no existe, aseguramos que el espacio personal sea 100% limpio y aislado
             if (targetDocId.startsWith("personal_")) {
                 window.appState = JSON.parse(JSON.stringify(appStateLimpioBase));
                 await setDoc(window.docRef, { 
@@ -304,15 +307,23 @@ window.cambiarVistaSeleccionada = async function(vistaId) {
     });
 };
 
+// Observador de estado de autenticación con Validación de Mail Confirmado
 onAuthStateChanged(auth, async (user) => {
     if (user) {
+        // Bloquear acceso si el email no fue verificado
+        if (!user.emailVerified) {
+            alert("Tu correo electrónico aún no ha sido verificado. Por favor revisá tu casilla de correo antes de ingresar.");
+            await signOut(auth);
+            window.showLogin();
+            return;
+        }
+
         window.showLoading();
         const dLocal = new Date();
         const currentLocalMonthStr = `${dLocal.getFullYear()}-${String(dLocal.getMonth() + 1).padStart(2, '0')}`;
         
         let vistaGuardada = localStorage.getItem("ultima_vista_id") || "personal";
         
-        // Poblar selector de vistas verificando pertenencia
         await window.poblarSelectorVistas(vistaGuardada);
 
         let targetDocId = (vistaGuardada === "personal") ? `personal_${user.uid}` : vistaGuardada;
@@ -379,7 +390,6 @@ onAuthStateChanged(auth, async (user) => {
             triggerPageRenders();
         });
 
-        // Escuchar invitaciones en tiempo real para la campana
         escucharInvitacionesUsuario(user.email);
 
         const userName = user.email ? user.email.split('@')[0] : 'Usuario';
@@ -393,7 +403,6 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// Escuchador de invitaciones en Firestore
 function escucharInvitacionesUsuario(userEmail) {
     if (unsubscribeInvitaciones) unsubscribeInvitaciones();
 
@@ -479,7 +488,6 @@ window.responderInvitacion = async function(invitacionId, grupoId, rol, nuevoEst
     }
 };
 
-// Salir del grupo actual (Darse de baja)
 window.salirDelGrupoActual = async function() {
     if (!confirm("¿Deseás salir de este grupo? Ya no tendrás acceso a sus datos.")) return;
 
@@ -956,7 +964,6 @@ window.handleInvitarMiembro = async function(e) {
     }
 
     try {
-        // Guardar invitación en la colección global 'invitaciones'
         await addDoc(collection(db, "invitaciones"), {
             grupoId: window.currentGrupo,
             grupoNombre: "Grupo Control de Gastos",
