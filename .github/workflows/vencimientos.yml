@@ -1,0 +1,25 @@
+name: Enviar Alertas de Vencimiento
+
+on:
+  workflow_dispatch:
+
+jobs:
+  enviar-alerta:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencias
+        run: npm install resend firebase
+
+      - name: Ejecutar script de notificaciones
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_TO: ${{ secrets.MY_EMAIL }}
+        run: node notificador.js
