@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, addDoc, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyDwRTcVpwoHJfTZ-eUr5ileTks5LN-npOE",
@@ -20,6 +20,7 @@ window.auth = auth;
 
 let unsubscribeSnapshot = null;
 let unsubscribeHormiga = null;
+let unsubscribeInvitaciones = null;
 
 const categoriasDefault = [
     { nombre: "Gastos Fijo", color: "#10b981", esTarjeta: false, vencimientoUnicoEnBloque: false },
@@ -51,12 +52,8 @@ const categoriasHormigaDefault = [
 const dInit = new Date();
 const defaultLocalMonth = `${dInit.getFullYear()}-${String(dInit.getMonth() + 1).padStart(2, '0')}`;
 
-if (auth.currentUser) {
-    const loginOverlay = document.getElementById('loginOverlay');
-    if (loginOverlay) loginOverlay.classList.add('hidden');
-}
-
-window.appState = window.appState || {
+// Estructura limpia garantizada para el Espacio Personal
+const appStateLimpioBase = {
     currentMonth: defaultLocalMonth,
     gastos: [],
     excepcionesMonto: {},
@@ -77,6 +74,13 @@ window.appState = window.appState || {
     grupoInfo: null
 };
 
+if (auth.currentUser) {
+    const loginOverlay = document.getElementById('loginOverlay');
+    if (loginOverlay) loginOverlay.classList.add('hidden');
+}
+
+window.appState = window.appState || JSON.parse(JSON.stringify(appStateLimpioBase));
+
 window.hormigaState = window.hormigaState || {
     gastos: [],
     categorias: JSON.parse(JSON.stringify(categoriasHormigaDefault)),
@@ -94,12 +98,6 @@ window.filtrosGraficoBalance = [];
 window.filtrosRecurrentesGrid = [];
 
 const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-
-window.guardarNuevoOrdenItems = function(categoria, nuevosIdsOrdenados) {
-    if (!window.appState.ordenItemsCategoria) window.appState.ordenItemsCategoria = {};
-    window.appState.ordenItemsCategoria[categoria] = nuevosIdsOrdenados;
-    window.saveDataToCloud();
-};
 
 window.showLoading = function() {
     const login = document.getElementById('loginOverlay');
@@ -128,8 +126,8 @@ window.showApp = function() {
     if (appContent) appContent.classList.remove('hidden');
 };
 
-// Carga dinámica de las opciones del selector de vistas
-window.poblarSelectorVistas = function(vistaSeleccionadaActual) {
+// Poblar selector dinámicamente: solo muestra el grupo si el usuario es miembro activo
+window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     const selector = document.getElementById('selectorVista');
     if (!selector) return;
 
@@ -138,17 +136,33 @@ window.poblarSelectorVistas = function(vistaSeleccionadaActual) {
 
     selector.innerHTML = '';
 
-    // 1. Opción Espacio Personal
+    // 1. Siempre se agrega Mi Espacio Personal
     const optPersonal = document.createElement('option');
     optPersonal.value = "personal";
     optPersonal.textContent = `🏠 Mi Espacio Personal (${user.email.split('@')[0]})`;
     selector.appendChild(optPersonal);
 
-    // 2. Opción Grupo Control de Gastos
-    const optGrupo = document.createElement('option');
-    optGrupo.value = "T3E2kcXODg2OLm7i1Roq";
-    optGrupo.textContent = `👥 Grupo Control de Gastos`;
-    selector.appendChild(optGrupo);
+    // 2. Verificar si pertenece al Grupo Compartido
+    try {
+        const grupoId = "T3E2kcXODg2OLm7i1Roq";
+        const grupoRef = doc(db, "app_data", grupoId);
+        const grupoSnap = await getDoc(grupoRef);
+
+        if (grupoSnap.exists()) {
+            const data = grupoSnap.data();
+            const miembros = data.appState?.grupoInfo?.miembros || {};
+            const esMiembro = miembros[user.uid] !== undefined || user.email === "nicolaslmancuso@gmail.com";
+
+            if (esMiembro) {
+                const optGrupo = document.createElement('option');
+                optGrupo.value = grupoId;
+                optGrupo.textContent = `👥 Grupo Control de Gastos`;
+                selector.appendChild(optGrupo);
+            }
+        }
+    } catch (e) {
+        console.error("Error al verificar membresía del grupo:", e);
+    }
 
     selector.value = vistaSeleccionadaActual || "personal";
 };
@@ -201,7 +215,7 @@ window.handleLogin = async function(e) {
     }
 };
 
-// Manejar Registro y creación automática del Espacio Personal
+// Registro con Envío de Correo de Verificación y Creación Limpia del Espacio Personal
 window.handleRegister = async function(e) {
     if (e) e.preventDefault();
     const emailEl = document.getElementById('registerEmail');
@@ -219,18 +233,21 @@ window.handleRegister = async function(e) {
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         const user = userCredential.user;
 
+        // Enviar correo de verificación nativo de Firebase
+        await sendEmailVerification(user);
+
         const personalDocId = `personal_${user.uid}`;
         const personalDocRef = doc(db, "app_data", personalDocId);
 
         localStorage.setItem("ultima_vista_id", "personal");
 
         await setDoc(personalDocRef, {
-            appState: JSON.parse(JSON.stringify(window.appState)),
+            appState: JSON.parse(JSON.stringify(appStateLimpioBase)),
             creadoEl: new Date().toISOString()
         });
 
-        window.poblarSelectorVistas("personal");
-        console.log(`✅ Usuario y Espacio Personal creados con éxito para: ${email}`);
+        alert("¡Cuenta creada con éxito! Te hemos enviado un correo de verificación. Por favor revisá tu bandeja de entrada.");
+        window.showLogin();
     } catch (error) {
         console.error("Error al registrar usuario:", error);
         window.showLogin();
@@ -250,7 +267,7 @@ window.cerrarSesion = function() {
     signOut(auth);
 };
 
-// Cambiar entre Espacio Personal y Grupos desde el selector (combo)
+// Cambiar entre Espacio Personal y Grupos con Aislamiento Estricto
 window.cambiarVistaSeleccionada = async function(vistaId) {
     if (!vistaId) return;
     
@@ -264,14 +281,23 @@ window.cambiarVistaSeleccionada = async function(vistaId) {
 
     if (unsubscribeSnapshot) unsubscribeSnapshot();
 
-    unsubscribeSnapshot = onSnapshot(window.docRef, (docSnap) => {
+    unsubscribeSnapshot = onSnapshot(window.docRef, async (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.appState) {
                 window.appState = { ...window.appState, ...data.appState };
             }
         } else {
-            window.saveDataToCloud();
+            // Si no existe, aseguramos que el espacio personal sea 100% limpio y aislado
+            if (targetDocId.startsWith("personal_")) {
+                window.appState = JSON.parse(JSON.stringify(appStateLimpioBase));
+                await setDoc(window.docRef, { 
+                    appState: window.appState, 
+                    creadoEl: new Date().toISOString() 
+                });
+            } else {
+                window.saveDataToCloud();
+            }
         }
         triggerPageRenders();
         window.showApp();
@@ -284,10 +310,10 @@ onAuthStateChanged(auth, async (user) => {
         const dLocal = new Date();
         const currentLocalMonthStr = `${dLocal.getFullYear()}-${String(dLocal.getMonth() + 1).padStart(2, '0')}`;
         
-        let vistaGuardada = localStorage.getItem("ultima_vista_id") || "T3E2kcXODg2OLm7i1Roq";
+        let vistaGuardada = localStorage.getItem("ultima_vista_id") || "personal";
         
-        // Poblar y sincronizar el combo desplegable
-        window.poblarSelectorVistas(vistaGuardada);
+        // Poblar selector de vistas verificando pertenencia
+        await window.poblarSelectorVistas(vistaGuardada);
 
         let targetDocId = (vistaGuardada === "personal") ? `personal_${user.uid}` : vistaGuardada;
 
@@ -299,7 +325,7 @@ onAuthStateChanged(auth, async (user) => {
         if (unsubscribeSnapshot) unsubscribeSnapshot();
         if (unsubscribeHormiga) unsubscribeHormiga();
 
-        unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
+        unsubscribeSnapshot = onSnapshot(docRef, async (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if (data.appState) {
@@ -310,7 +336,15 @@ onAuthStateChanged(auth, async (user) => {
                     if (!window.appState.currentMonth) window.appState.currentMonth = currentLocalMonthStr;
                 }
             } else {
-                window.saveDataToCloud();
+                if (targetDocId.startsWith("personal_")) {
+                    window.appState = JSON.parse(JSON.stringify(appStateLimpioBase));
+                    await setDoc(docRef, { 
+                        appState: window.appState, 
+                        creadoEl: new Date().toISOString() 
+                    });
+                } else {
+                    window.saveDataToCloud();
+                }
             }
             triggerPageRenders();
             window.showApp();
@@ -345,6 +379,9 @@ onAuthStateChanged(auth, async (user) => {
             triggerPageRenders();
         });
 
+        // Escuchar invitaciones en tiempo real para la campana
+        escucharInvitacionesUsuario(user.email);
+
         const userName = user.email ? user.email.split('@')[0] : 'Usuario';
         const grupoDisplay = document.getElementById('grupoStatus');
         if (grupoDisplay) grupoDisplay.innerHTML = `👤 ${userName}`;
@@ -352,8 +389,120 @@ onAuthStateChanged(auth, async (user) => {
         window.showLogin();
         if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
         if (unsubscribeHormiga) { unsubscribeHormiga(); unsubscribeHormiga = null; }
+        if (unsubscribeInvitaciones) { unsubscribeInvitaciones(); unsubscribeInvitaciones = null; }
     }
 });
+
+// Escuchador de invitaciones en Firestore
+function escucharInvitacionesUsuario(userEmail) {
+    if (unsubscribeInvitaciones) unsubscribeInvitaciones();
+
+    const q = query(
+        collection(db, "invitaciones"), 
+        where("destinatarioEmail", "==", userEmail.toLowerCase()),
+        where("estado", "==", "PENDIENTE")
+    );
+
+    unsubscribeInvitaciones = onSnapshot(q, (snapshot) => {
+        const invitaciones = [];
+        snapshot.forEach(docSnap => {
+            invitaciones.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        window.renderBandejaNotificaciones(invitaciones);
+    });
+}
+
+window.toggleBandejaNotificaciones = function() {
+    const drop = document.getElementById('dropdownNotificaciones');
+    if (drop) drop.classList.toggle('hidden');
+};
+
+window.renderBandejaNotificaciones = function(invitaciones) {
+    const badge = document.getElementById('badgeNotificaciones');
+    const lista = document.getElementById('listaNotificaciones');
+    if (!badge || !lista) return;
+
+    if (invitaciones.length > 0) {
+        badge.innerText = invitaciones.length;
+        badge.classList.remove('hidden');
+        lista.innerHTML = '';
+
+        invitaciones.forEach(inv => {
+            lista.innerHTML += `
+                <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2">
+                    <p class="text-slate-300">
+                        <strong class="text-amber-400">${inv.remitenteEmail}</strong> te invitó a unirte a <strong>${inv.grupoNombre}</strong> (${inv.rol}).
+                    </p>
+                    <div class="flex gap-2 justify-end">
+                        <button onclick="responderInvitacion('${inv.id}', '${inv.grupoId}', '${inv.rol}', 'RECHAZADO')" class="px-2.5 py-1 bg-rose-950/60 hover:bg-rose-900 text-rose-300 rounded-lg font-semibold text-[11px]">
+                            Rechazar
+                        </button>
+                        <button onclick="responderInvitacion('${inv.id}', '${inv.grupoId}', '${inv.rol}', 'ACEPTADO')" class="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-slate-950 rounded-lg font-bold text-[11px]">
+                            Aceptar
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+    } else {
+        badge.classList.add('hidden');
+        lista.innerHTML = `<p class="text-xs text-slate-500 text-center py-2">No tenés notificaciones pendientes.</p>`;
+    }
+};
+
+window.responderInvitacion = async function(invitacionId, grupoId, rol, nuevoEstado) {
+    try {
+        const user = auth.currentUser;
+        const invRef = doc(db, "invitaciones", invitacionId);
+        await updateDoc(invRef, { estado: nuevoEstado });
+
+        if (nuevoEstado === 'ACEPTADO') {
+            const grupoRef = doc(db, "app_data", grupoId);
+            const grupoSnap = await getDoc(grupoRef);
+
+            if (grupoSnap.exists()) {
+                const data = grupoSnap.data();
+                const grupoInfo = data.appState.grupoInfo || { miembros: {} };
+                grupoInfo.miembros[user.uid] = { email: user.email, rol: rol };
+
+                await updateDoc(grupoRef, { "appState.grupoInfo": grupoInfo });
+            }
+
+            alert("¡Te uniste al grupo con éxito!");
+            await window.poblarSelectorVistas(grupoId);
+            window.cambiarVistaSeleccionada(grupoId);
+        } else {
+            alert("Has rechazado la invitación.");
+        }
+    } catch (e) {
+        console.error("Error al responder invitación:", e);
+    }
+};
+
+// Salir del grupo actual (Darse de baja)
+window.salirDelGrupoActual = async function() {
+    if (!confirm("¿Deseás salir de este grupo? Ya no tendrás acceso a sus datos.")) return;
+
+    try {
+        const user = auth.currentUser;
+        const grupoId = window.currentGrupo;
+        const grupoRef = doc(db, "app_data", grupoId);
+        const grupoSnap = await getDoc(grupoRef);
+
+        if (grupoSnap.exists()) {
+            const data = grupoSnap.data();
+            const miembros = data.appState.grupoInfo?.miembros || {};
+            delete miembros[user.uid];
+
+            await updateDoc(grupoRef, { "appState.grupoInfo.miembros": miembros });
+            alert("Has salido del grupo correctamente.");
+            await window.poblarSelectorVistas("personal");
+            window.cambiarVistaSeleccionada("personal");
+        }
+    } catch (e) {
+        console.error("Error al salir del grupo:", e);
+    }
+};
 
 window.saveDataToCloud = async function() {
     try {
@@ -391,23 +540,11 @@ function actualizarVisibilidadBotonesAdmin() {
     const btnGestionGrupo = document.getElementById('btnGestionGrupo');
 
     if (esAdmin) {
-        if (btnConfigCat) {
-            btnConfigCat.classList.remove('hidden');
-            btnConfigCat.style.display = 'inline-flex';
-        }
-        if (btnGestionGrupo) {
-            btnGestionGrupo.classList.remove('hidden');
-            btnGestionGrupo.style.display = 'inline-flex';
-        }
+        if (btnConfigCat) { btnConfigCat.classList.remove('hidden'); btnConfigCat.style.display = 'inline-flex'; }
+        if (btnGestionGrupo) { btnGestionGrupo.classList.remove('hidden'); btnGestionGrupo.style.display = 'inline-flex'; }
     } else {
-        if (btnConfigCat) {
-            btnConfigCat.classList.add('hidden');
-            btnConfigCat.style.display = 'none';
-        }
-        if (btnGestionGrupo) {
-            btnGestionGrupo.classList.add('hidden');
-            btnGestionGrupo.style.display = 'none';
-        }
+        if (btnConfigCat) { btnConfigCat.classList.add('hidden'); btnConfigCat.style.display = 'none'; }
+        if (btnGestionGrupo) { btnGestionGrupo.classList.add('hidden'); btnGestionGrupo.style.display = 'none'; }
     }
 }
 
@@ -483,14 +620,10 @@ window.getCalculatedDataForMonth = function(targetMonth) {
 
     (window.appState.gastos || []).forEach(gasto => {
         const mesEliminacion = window.appState.excepcionesEliminacion?.[gasto.id];
-        if (mesEliminacion && targetMonth >= mesEliminacion) {
-            return;
-        }
+        if (mesEliminacion && targetMonth >= mesEliminacion) return;
 
         const borradoPuntual = window.appState.excepcionesEliminacionSoloMes?.[`${gasto.id}_${targetMonth}`];
-        if (borradoPuntual) {
-            return;
-        }
+        if (borradoPuntual) return;
 
         const excepcionCatKey = `${gasto.id}_${targetMonth}`;
         const categoriaAplicar = window.appState.excepcionesCategoria?.[excepcionCatKey] ?? gasto.categoria;
@@ -799,17 +932,14 @@ function renderMiembrosGrupo() {
     }
 }
 
-window.handleInvitarMiembro = function(e) {
-    e.preventDefault();
-    console.log("--> Iniciando envío de invitación...");
-
+window.handleInvitarMiembro = async function(e) {
+    if (e) e.preventDefault();
     const emailInput = document.getElementById('inputInvitarEmail');
     const rolSelect = document.getElementById('selectInvitarRol');
     if (!emailInput) return;
 
     const email = emailInput.value.trim().toLowerCase();
     const rol = rolSelect ? rolSelect.value : 'editor';
-
     if (!email) return;
 
     if (!window.appState.grupoInfo) {
@@ -825,33 +955,36 @@ window.handleInvitarMiembro = function(e) {
         return;
     }
 
-    const templateParams = {
-        to_email: email,
-        para_correo_electrónico: email,
-        rol_invitado: rol.toUpperCase(),
-        remitente: auth.currentUser.email || 'Administrador'
-    };
+    try {
+        // Guardar invitación en la colección global 'invitaciones'
+        await addDoc(collection(db, "invitaciones"), {
+            grupoId: window.currentGrupo,
+            grupoNombre: "Grupo Control de Gastos",
+            remitenteEmail: auth.currentUser.email,
+            destinatarioEmail: email,
+            rol: rol,
+            estado: "PENDIENTE",
+            fecha: new Date().toISOString()
+        });
 
-    if (typeof emailjs !== 'undefined') {
-        console.log("Enviando mail a través de EmailJS con params:", templateParams);
-        emailjs.send('service_hib3aln', 'template_9tbnrfg', templateParams)
-            .then(function(response) {
-                console.log('✅ Correo de invitación enviado con éxito!', response.status, response.text);
-                alert(`¡Invitación enviada con éxito a ${email}!`);
-            }, function(error) {
-                console.error('❌ Error devuelto por EmailJS:', error);
-                alert('La invitación se guardó, pero EmailJS devolvió un error: ' + JSON.stringify(error));
+        if (typeof emailjs !== 'undefined') {
+            emailjs.send('service_hib3aln', 'template_9tbnrfg', {
+                to_email: email,
+                para_correo_electrónico: email,
+                rol_invitado: rol.toUpperCase(),
+                remitente: auth.currentUser.email
             });
-    } else {
-        console.warn("⚠️ El SDK de EmailJS no está cargado.");
-        alert("Atención: Falta cargar el SDK de EmailJS en index.html.");
+        }
+
+        window.appState.grupoInfo.invitacionesPendientes.push({ email, rol, fecha: new Date().toISOString() });
+        emailInput.value = '';
+
+        window.saveDataToCloud();
+        renderMiembrosGrupo();
+        alert(`¡Invitación enviada con éxito a ${email}!`);
+    } catch (err) {
+        console.error("Error al enviar invitación:", err);
     }
-
-    window.appState.grupoInfo.invitacionesPendientes.push({ email, rol, fecha: new Date().toISOString() });
-    emailInput.value = '';
-
-    window.saveDataToCloud();
-    renderMiembrosGrupo();
 };
 
 window.removerMiembroGrupo = function(uid) {
