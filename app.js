@@ -124,7 +124,7 @@ window.esUsuarioEditor = function() {
 };
 
 // ==========================================
-// MODAL GENÉRICO DE ADVERTENCIA Y CONFIRMACIÓN
+// MODAL GENÉRICO DE ADVERTENCIA
 // ==========================================
 
 function mostrarMensajeApp(titulo, mensaje) {
@@ -174,7 +174,6 @@ function aplicarRestriccionesInterfaz() {
         styleTag.innerHTML = '';
     }
 
-    // Ocultar botones principales por coincidencia de texto
     const botones = document.querySelectorAll('button');
     botones.forEach(btn => {
         const txt = btn.textContent.toLowerCase();
@@ -184,7 +183,6 @@ function aplicarRestriccionesInterfaz() {
     });
 }
 
-// Interceptar renderizado global
 const originalRenderApp = window.renderApp || function(){};
 window.renderApp = function() {
     if (typeof originalRenderApp === 'function') {
@@ -234,47 +232,10 @@ if (typeof window.deleteGasto === 'function') {
 }
 
 // ==========================================
-// PERSISTENCIA DE CAMBIO DE ROL CON DOS BOTONES Y SPINNER
+// PERSISTENCIA DE CAMBIO DE ROL DIRECTA CON SPINNER
 // ==========================================
 
-document.addEventListener('change', function(e) {
-    if (e.target && (e.target.matches('select[onchange*="cambiarRolMiembro"]') || e.target.classList.contains('select-rol-miembro') || e.target.getAttribute('data-uid-miembro'))) {
-        const select = e.target;
-        const uidMiembro = select.getAttribute('data-uid-miembro') || select.dataset.uid;
-        const nuevoRol = select.value;
-        const rolAnterior = select.getAttribute('data-rol-anterior') || (nuevoRol === 'lector' ? 'editor' : 'lector');
-        
-        solicitarConfirmacionCambioRol(uidMiembro, nuevoRol, select, rolAnterior);
-    }
-});
-
-window.cambiarRolMiembro = function(uidMiembro, nuevoRol, selectElement) {
-    const rolAnterior = selectElement ? (selectElement.getAttribute('data-rol-anterior') || (nuevoRol === 'lector' ? 'editor' : 'lector')) : (nuevoRol === 'lector' ? 'editor' : 'lector');
-    solicitarConfirmacionCambioRol(uidMiembro, nuevoRol, selectElement, rolAnterior);
-};
-
-function solicitarConfirmacionCambioRol(uidMiembro, nuevoRol, selectElement, rolAnterior) {
-    const accionConfirmar = () => ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, selectElement);
-    const accionCancelar = () => { if (selectElement) selectElement.value = rolAnterior; };
-
-    if (typeof window.mostrarModalConfirmacion === 'function') {
-        // Invocación con callbacks de confirmación y cancelación para garantizar los 2 botones
-        window.mostrarModalConfirmacion(
-            "Cambiar permisos", 
-            `¿Estás seguro de cambiar el rol de este integrante a ${nuevoRol.toUpperCase()}?`, 
-            accionConfirmar,
-            accionCancelar
-        );
-    } else {
-        if (confirm(`¿Estás seguro de cambiar el rol de este integrante a ${nuevoRol.toUpperCase()}?`)) {
-            accionConfirmar();
-        } else {
-            accionCancelar();
-        }
-    }
-}
-
-async function ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, selectElement) {
+window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
     let loaderDiv = document.getElementById('loader-cambio-rol');
     if (!loaderDiv) {
         loaderDiv = document.createElement('div');
@@ -287,11 +248,9 @@ async function ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, selectE
     }
 
     try {
-        // Obtener el ID del grupo gestionado de manera segura desde appState.grupoInfo
         const grupoInfo = window.appState?.grupoInfo;
         let grupoId = grupoInfo?.id || grupoInfo?.grupoId;
         
-        // Fallback si no está el id en grupoInfo, buscar en la lista de grupos cargados
         if (!grupoId || grupoId.startsWith('personal_')) {
             if (window.appState?.grupos && window.appState.grupos.length > 0) {
                 const grupoCompartido = window.appState.grupos.find(g => g.id && !g.id.startsWith('personal_'));
@@ -306,12 +265,10 @@ async function ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, selectE
         }
 
         if (typeof db !== 'undefined') {
-            // Actualizar memoria local
             if (window.appState?.grupoInfo?.miembros?.[uidMiembro]) {
                 window.appState.grupoInfo.miembros[uidMiembro].rol = nuevoRol;
             }
             
-            // Persistir en Firestore
             await db.collection('grupos').doc(grupoId).update({
                 [`miembros.${uidMiembro}.rol`]: nuevoRol
             });
@@ -336,7 +293,7 @@ async function ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, selectE
             loaderDiv.style.display = 'none';
         }
     }
-}
+};
 
 const categoriasDefault = [
     { nombre: "Gastos Fijo", color: "#10b981", esTarjeta: false, vencimientoUnicoEnBloque: false },
