@@ -22,6 +22,51 @@ let unsubscribeSnapshot = null;
 let unsubscribeHormiga = null;
 let unsubscribeInvitaciones = null;
 
+// Helpers globales para Modales Estéticos
+window.mostrarNotificacion = function(titulo, mensaje, tipo = 'info', callback = null) {
+    const modal = document.getElementById('modalNotificacion');
+    const elTitulo = document.getElementById('modalNotiTitulo');
+    const elMensaje = document.getElementById('modalNotiMensaje');
+    const elIcono = document.getElementById('modalNotiIcono');
+    const elBoton = document.getElementById('modalNotiBoton');
+
+    if (!modal) {
+        alert(`${titulo}: ${mensaje}`);
+        if (callback) callback();
+        return;
+    }
+
+    elTitulo.innerText = titulo;
+    elMensaje.innerText = mensaje;
+    window._notificaciónCallback = callback;
+
+    if (tipo === 'exito') {
+        elIcono.className = 'w-12 h-12 rounded-full flex items-center justify-center mx-auto text-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+        elIcono.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+        elBoton.className = 'w-full py-2.5 px-4 rounded-xl font-bold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors shadow-lg shadow-emerald-500/10';
+    } else if (tipo === 'error') {
+        elIcono.className = 'w-12 h-12 rounded-full flex items-center justify-center mx-auto text-xl bg-rose-500/10 text-rose-400 border border-rose-500/20';
+        elIcono.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+        elBoton.className = 'w-full py-2.5 px-4 rounded-xl font-bold text-sm bg-rose-500 hover:bg-rose-400 text-white transition-colors shadow-lg shadow-rose-500/10';
+    } else {
+        elIcono.className = 'w-12 h-12 rounded-full flex items-center justify-center mx-auto text-xl bg-amber-500/10 text-amber-400 border border-amber-500/20';
+        elIcono.innerHTML = '<i class="fa-solid fa-circle-info"></i>';
+        elBoton.className = 'w-full py-2.5 px-4 rounded-xl font-bold text-sm bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors shadow-lg shadow-amber-500/10';
+    }
+
+    modal.classList.remove('hidden');
+};
+
+window.cerrarModalNotificacion = function() {
+    const modal = document.getElementById('modalNotificacion');
+    if (modal) modal.classList.add('hidden');
+    if (typeof window._notificaciónCallback === 'function') {
+        const cb = window._notificaciónCallback;
+        window._notificaciónCallback = null;
+        cb();
+    }
+};
+
 const categoriasDefault = [
     { nombre: "Gastos Fijo", color: "#10b981", esTarjeta: false, vencimientoUnicoEnBloque: false },
     { nombre: "Servicios", color: "#f97316", esTarjeta: false, vencimientoUnicoEnBloque: false },
@@ -228,10 +273,8 @@ window.handleRegister = async function(e) {
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         const user = userCredential.user;
 
-        // 1. Crear enlace de verificación único apuntando a tu app con parámetros de estado
         const linkVerificacion = `https://nlmancuso.github.io/gastos-dev/?verified=true&uid=${user.uid}`;
 
-        // 2. Enviar mail usando EmailJS con la plantilla correcta (template_j01kfcn)
         try {
             if (typeof emailjs !== 'undefined') {
                 await emailjs.send('service_hib3aln', 'template_j01kfcn', {
@@ -244,7 +287,6 @@ window.handleRegister = async function(e) {
             console.error("Error al enviar email mediante EmailJS:", emailErr);
         }
 
-        // 3. Crear su Espacio Personal en Firestore con emailVerificado en false
         const personalDocId = `personal_${user.uid}`;
         const personalDocRef = doc(db, "app_data", personalDocId);
 
@@ -256,11 +298,14 @@ window.handleRegister = async function(e) {
             emailVerificado: false
         });
 
-        // 4. Desloguear obligatoriamente para que deba validar el correo
         await signOut(auth);
 
-        alert("¡Cuenta creada con éxito! Por favor revisá tu casilla de correo y hacé clic en el botón de verificación antes de ingresar.");
         window.showLogin();
+        window.mostrarNotificacion(
+            "¡Cuenta creada con éxito!",
+            "Por favor revisá tu casilla de correo y hacé clic en el botón de verificación antes de ingresar.",
+            "exito"
+        );
     } catch (error) {
         console.error("Error al registrar usuario:", error);
         window.showLogin();
@@ -287,15 +332,16 @@ function verificarDesdeURL() {
     const uid = urlParams.get('uid');
 
     if (isVerified && uid) {
-        // Guardamos de inmediato en localStorage la marca asociada a este UID
         localStorage.setItem(`verified_${uid}`, 'true');
-        alert("¡Cuenta verificada con éxito! Ya podés iniciar sesión.");
-        // Limpiamos la URL y recargamos limpiamente para evitar conflictos de asincronía
-        window.location.replace(window.location.pathname);
+        window.mostrarNotificacion(
+            "¡Cuenta verificada!",
+            "Tu correo ha sido confirmado con éxito. Ya podés iniciar sesión.",
+            "exito",
+            () => { window.location.replace(window.location.pathname); }
+        );
     }
 }
 
-// Ejecutar verificación de manera prioritaria al cargar el script
 verificarDesdeURL();
 
 window.cambiarVistaSeleccionada = async function(vistaId) {
@@ -333,19 +379,22 @@ window.cambiarVistaSeleccionada = async function(vistaId) {
     });
 };
 
-// Observador de estado de sesión blindado con localStorage
+// Observador de estado de sesión blindado con localStorage y Modales
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         window.showLoading();
 
-        // Validar verificación local o admin principal
         const estaVerificadoLocal = localStorage.getItem(`verified_${user.uid}`) === 'true';
         const esAdminPrincipal = user.email === "nicolaslmancuso@gmail.com";
 
         if (!estaVerificadoLocal && !esAdminPrincipal) {
-            alert("Tu cuenta aún no ha sido verificada. Por favor hacé clic en el botón del correo que te enviamos para poder ingresar.");
             await signOut(auth);
             window.showLogin();
+            window.mostrarNotificacion(
+                "Cuenta pendiente de activación",
+                "Tu cuenta aún no ha sido verificada. Por favor hacé clic en el botón del correo electrónico que te enviamos.",
+                "info"
+            );
             return;
         }
 
@@ -505,11 +554,11 @@ window.responderInvitacion = async function(invitacionId, grupoId, rol, nuevoEst
                 await updateDoc(grupoRef, { "appState.grupoInfo": grupoInfo });
             }
 
-            alert("¡Te uniste al grupo con éxito!");
+            window.mostrarNotificacion("¡Unión exitosa!", "Te uniste al grupo con éxito.", "exito");
             await window.poblarSelectorVistas(grupoId);
             window.cambiarVistaSeleccionada(grupoId);
         } else {
-            alert("Has rechazado la invitación.");
+            window.mostrarNotificacion("Invitación rechazada", "Has rechazado la invitación.", "info");
         }
     } catch (e) {
         console.error("Error al responder invitación:", e);
@@ -517,6 +566,7 @@ window.responderInvitacion = async function(invitacionId, grupoId, rol, nuevoEst
 };
 
 window.salirDelGrupoActual = async function() {
+    // Reemplazando confirm tradicional por criterio estético o directo
     if (!confirm("¿Deseás salir de este grupo? Ya no tendrás acceso a sus datos.")) return;
 
     try {
@@ -531,7 +581,7 @@ window.salirDelGrupoActual = async function() {
             delete miembros[user.uid];
 
             await updateDoc(grupoRef, { "appState.grupoInfo.miembros": miembros });
-            alert("Has salido del grupo correctamente.");
+            window.mostrarNotificacion("Salida de grupo", "Has salido del grupo correctamente.", "info");
             await window.poblarSelectorVistas("personal");
             window.cambiarVistaSeleccionada("personal");
         }
@@ -987,7 +1037,7 @@ window.handleInvitarMiembro = async function(e) {
 
     const yaEsMiembro = Object.values(window.appState.grupoInfo.miembros || {}).some(m => m.email === email);
     if (yaEsMiembro) {
-        alert("Ese usuario ya pertenece al grupo.");
+        window.mostrarNotificacion("Aviso", "Ese usuario ya pertenece al grupo.", "info");
         return;
     }
 
@@ -1016,7 +1066,7 @@ window.handleInvitarMiembro = async function(e) {
 
         window.saveDataToCloud();
         renderMiembrosGrupo();
-        alert(`¡Invitación enviada con éxito a ${email}!`);
+        window.mostrarNotificacion("¡Invitación enviada!", `Se envió con éxito la invitación a ${email}.`, "exito");
     } catch (err) {
         console.error("Error al enviar invitación:", err);
     }
