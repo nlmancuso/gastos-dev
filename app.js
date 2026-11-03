@@ -234,7 +234,12 @@ window.handleRegister = async function(e) {
         const user = userCredential.user;
 
         // 1. Enviar correo de verificación nativo de Firebase
-        await sendEmailVerification(user);
+        const actionCodeSettings = {
+    url: 'https://nlmancuso.github.io/gastos-dev/', // URL exacta de tu GitHub Pages
+    handleCodeInApp: true
+};
+
+await sendEmailVerification(user, actionCodeSettings);
 
         // 2. Crear su Espacio Personal en Firestore
         const personalDocId = `personal_${user.uid}`;
