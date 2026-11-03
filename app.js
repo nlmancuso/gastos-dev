@@ -229,36 +229,35 @@ window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
     }
 
     try {
-        const grupoInfo = window.appState?.grupoInfo;
-        let grupoId = grupoInfo?.id || grupoInfo?.grupoId;
-        
-        if (!grupoId || grupoId.startsWith('personal_')) {
-            if (window.currentGrupo && !window.currentGrupo.startsWith('personal_')) {
-                grupoId = window.currentGrupo;
-            } else if (window.appState?.grupos && window.appState.grupos.length > 0) {
-                const grupoCompartido = window.appState.grupos.find(g => g.id && !g.id.startsWith('personal_'));
-                if (grupoCompartido) grupoId = grupoCompartido.id;
-            }
+        // 1. Obtener el grupoId de la vista seleccionada en el desplegable o del estado global
+        const selector = document.getElementById('selectorVista');
+        let grupoId = selector ? selector.value : window.currentGrupo;
+
+        if (!grupoId || grupoId === 'personal' || grupoId.startsWith('personal_')) {
+            grupoId = window.currentGrupo;
         }
 
-        if (!grupoId || grupoId.startsWith('personal_')) {
+        // 2. Si sigue siendo espacio personal, no se pueden editar roles de grupo
+        if (!grupoId || grupoId === 'personal' || grupoId.startsWith('personal_')) {
             if (loaderDiv) loaderDiv.style.display = 'none';
-            window.mostrarNotificacion("Atención", "No se encontró un grupo compartido activo para modificar roles.", "info");
+            window.mostrarNotificacion(
+                "Atención", 
+                "Debes seleccionar un grupo compartido activo en el menú superior para modificar los roles de sus miembros.", 
+                "info"
+            );
             return;
         }
 
         if (typeof db !== 'undefined') {
+            // Actualización local en appState
             if (window.appState?.grupoInfo?.miembros?.[uidMiembro]) {
                 window.appState.grupoInfo.miembros[uidMiembro].rol = nuevoRol;
             }
             
-            await updateDoc(doc(db, "grupos", grupoId), {
-                [`miembros.${uidMiembro}.rol`]: nuevoRol
+            // Actualización directa en la colección de Firestore
+            await updateDoc(doc(db, "app_data", grupoId), {
+                [`appState.grupoInfo.miembros.${uidMiembro}.rol`]: nuevoRol
             });
-
-            await setDoc(doc(db, "app_data", grupoId), {
-                appState: JSON.parse(JSON.stringify(window.appState))
-            }, { merge: true });
 
             console.log(`Rol actualizado en Firebase para ${uidMiembro} -> ${nuevoRol}`);
             
