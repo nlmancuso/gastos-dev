@@ -334,7 +334,7 @@ function verificarDesdeURL() {
     if (isVerified && uid) {
         localStorage.setItem(`verified_${uid}`, 'true');
         window.mostrarNotificacion(
-            "¡Cuenta verificada!",
+            "¡Cuenta verificada con éxito!",
             "Tu correo ha sido confirmado con éxito. Ya podés iniciar sesión.",
             "exito",
             () => { window.location.replace(window.location.pathname); }
@@ -392,7 +392,7 @@ onAuthStateChanged(auth, async (user) => {
             window.showLogin();
             window.mostrarNotificacion(
                 "Cuenta pendiente de activación",
-                "Tu cuenta aún no ha sido verificada. Por favor hacé clic en el botón del correo electrónico que te enviamos.",
+                "Tu cuenta aún no ha sido verificada. Por favor hacé clic en el botón del correo que te enviamos para poder ingresar.",
                 "info"
             );
             return;
@@ -566,7 +566,6 @@ window.responderInvitacion = async function(invitacionId, grupoId, rol, nuevoEst
 };
 
 window.salirDelGrupoActual = async function() {
-    // Reemplazando confirm tradicional por criterio estético o directo
     if (!confirm("¿Deseás salir de este grupo? Ya no tendrás acceso a sus datos.")) return;
 
     try {
