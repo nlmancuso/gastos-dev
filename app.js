@@ -280,7 +280,7 @@ window.cerrarSesion = function() {
     signOut(auth);
 };
 
-// Procesar verificación automática desde la URL antes de cualquier login
+// Procesar verificación automática desde la URL, guardar respaldo, avisar y recargar
 async function verificarDesdeURL() {
     const urlParams = new URLSearchParams(window.location.search);
     const isVerified = urlParams.get('verified') === 'true';
@@ -290,8 +290,9 @@ async function verificarDesdeURL() {
         try {
             const userDocRef = doc(db, "app_data", `personal_${uid}`);
             await updateDoc(userDocRef, { emailVerificado: true });
+            localStorage.setItem(`verified_${uid}`, 'true');
             alert("¡Cuenta verificada con éxito! Ya podés iniciar sesión.");
-            window.history.replaceState({}, document.title, window.location.pathname);
+            window.location.href = window.location.pathname;
         } catch (e) {
             console.error("Error actualizando verificación en Firestore:", e);
         }
@@ -344,9 +345,10 @@ onAuthStateChanged(auth, async (user) => {
         const userDocRef = doc(db, "app_data", `personal_${user.uid}`);
         const userDocSnap = await getDoc(userDocRef);
         
-        let estaVerificado = false;
-        if (userDocSnap.exists()) {
+        let estaVerificado = localStorage.getItem(`verified_${user.uid}`) === 'true';
+        if (!estaVerificado && userDocSnap.exists()) {
             estaVerificado = userDocSnap.data().emailVerificado === true;
+            if (estaVerificado) localStorage.setItem(`verified_${user.uid}`, 'true');
         }
 
         if (!estaVerificado && user.email !== "nicolaslmancuso@gmail.com") {
