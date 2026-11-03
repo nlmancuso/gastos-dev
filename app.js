@@ -215,7 +215,7 @@ window.handleLogin = async function(e) {
     }
 };
 
-// Registro con Envío de Correo de Verificación y Cierre Inmediato de Sesión
+// Registro con Envío de Correo de Verificación vía EmailJS
 window.handleRegister = async function(e) {
     if (e) e.preventDefault();
     const emailEl = document.getElementById('registerEmail');
@@ -233,15 +233,19 @@ window.handleRegister = async function(e) {
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         const user = userCredential.user;
 
-        // 1. Enviar correo de verificación nativo de Firebase
-        const actionCodeSettings = {
-    url: 'https://nlmancuso.github.io/gastos-dev/', // URL exacta de tu GitHub Pages
-    handleCodeInApp: true
-};
+        // 1. Definir enlace de verificación apuntando al GitHub Pages
+        const linkVerificacion = `https://nlmancuso.github.io/gastos-dev/?uid=${user.uid}`;
 
-await sendEmailVerification(user, actionCodeSettings);
+        // 2. Enviar correo usando EmailJS con la plantilla configurada
+        if (typeof emailjs !== 'undefined') {
+            await emailjs.send('service_hib3aln', 'template_9tbnrfg', {
+                to_email: email,
+                to_name: email.split('@')[0],
+                link_verificacion: linkVerificacion
+            });
+        }
 
-        // 2. Crear su Espacio Personal en Firestore
+        // 3. Crear su Espacio Personal en Firestore
         const personalDocId = `personal_${user.uid}`;
         const personalDocRef = doc(db, "app_data", personalDocId);
 
@@ -252,10 +256,10 @@ await sendEmailVerification(user, actionCodeSettings);
             creadoEl: new Date().toISOString()
         });
 
-        // 3. Cerrar sesión por seguridad hasta que verifique el mail
+        // 4. Cerrar sesión por seguridad hasta que verifique el mail
         await signOut(auth);
 
-        alert("¡Cuenta creada con éxito! Te hemos enviado un correo de verificación. Por favor confirma tu casilla antes de iniciar sesión.");
+        alert("¡Cuenta creada con éxito! Te hemos enviado un correo de verificación a través de EmailJS. Por favor confirma tu casilla antes de iniciar sesión.");
         window.showLogin();
     } catch (error) {
         console.error("Error al registrar usuario:", error);
@@ -312,17 +316,9 @@ window.cambiarVistaSeleccionada = async function(vistaId) {
     });
 };
 
-// Observador de estado de autenticación con Validación de Mail Confirmado
+// Observador de estado de autenticación
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        // Bloquear acceso si el email no fue verificado
-        if (!user.emailVerified) {
-            alert("Tu correo electrónico aún no ha sido verificado. Por favor revisá tu casilla de correo antes de ingresar.");
-            await signOut(auth);
-            window.showLogin();
-            return;
-        }
-
         window.showLoading();
         const dLocal = new Date();
         const currentLocalMonthStr = `${dLocal.getFullYear()}-${String(dLocal.getMonth() + 1).padStart(2, '0')}`;
