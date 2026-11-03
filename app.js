@@ -280,6 +280,27 @@ window.cerrarSesion = function() {
     signOut(auth);
 };
 
+// Procesar verificación automática desde la URL antes de cualquier login
+async function verificarDesdeURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const isVerified = urlParams.get('verified') === 'true';
+    const uid = urlParams.get('uid');
+
+    if (isVerified && uid) {
+        try {
+            const userDocRef = doc(db, "app_data", `personal_${uid}`);
+            await updateDoc(userDocRef, { emailVerificado: true });
+            alert("¡Cuenta verificada con éxito! Ya podés iniciar sesión.");
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } catch (e) {
+            console.error("Error actualizando verificación en Firestore:", e);
+        }
+    }
+}
+
+// Ejecutar verificación al cargar la página
+verificarDesdeURL();
+
 window.cambiarVistaSeleccionada = async function(vistaId) {
     if (!vistaId) return;
     
@@ -315,46 +336,26 @@ window.cambiarVistaSeleccionada = async function(vistaId) {
     });
 };
 
-// Observador de Autenticación con Manejo Persistente de Verificación
+// Observador de estado de sesión
 onAuthStateChanged(auth, async (user) => {
     if (user) {
+        window.showLoading();
+
         const userDocRef = doc(db, "app_data", `personal_${user.uid}`);
-        const urlParams = new URLSearchParams(window.location.search);
-        const isVerifiedFromUrl = urlParams.get('verified') === 'true';
-
-        // 1. Si la URL trae la marca de verificación, actualizamos Firestore y guardamos marca local
-        if (isVerifiedFromUrl) {
-            try {
-                await updateDoc(userDocRef, { emailVerificado: true });
-                localStorage.setItem(`verified_${user.uid}`, 'true');
-                // Limpiamos los parámetros de la URL para dejarla limpia
-                window.history.replaceState({}, document.title, window.location.pathname);
-            } catch (e) {
-                console.log("Error al actualizar verificación en Firestore:", e);
-            }
-        }
-
-        // 2. Verificar el estado en Firestore o LocalStorage
-        let estaVerificado = localStorage.getItem(`verified_${user.uid}`) === 'true';
+        const userDocSnap = await getDoc(userDocRef);
         
-        if (!estaVerificado) {
-            const userDocSnap = await getDoc(userDocRef);
-            if (userDocSnap.exists() && userDocSnap.data().emailVerificado === true) {
-                estaVerificado = true;
-                localStorage.setItem(`verified_${user.uid}`, 'true');
-            }
+        let estaVerificado = false;
+        if (userDocSnap.exists()) {
+            estaVerificado = userDocSnap.data().emailVerificado === true;
         }
 
-        // 3. Si no está verificado, cerramos sesión y mostramos alerta
-        if (!estaVerificado) {
+        if (!estaVerificado && user.email !== "nicolaslmancuso@gmail.com") {
             alert("Tu cuenta aún no ha sido verificada. Por favor hacé clic en el botón del correo que te enviamos para poder ingresar.");
             await signOut(auth);
             window.showLogin();
             return;
         }
 
-        // 4. Si está verificado, continuar con la carga normal de la app
-        window.showLoading();
         const dLocal = new Date();
         const currentLocalMonthStr = `${dLocal.getFullYear()}-${String(dLocal.getMonth() + 1).padStart(2, '0')}`;
         
