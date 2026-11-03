@@ -179,16 +179,16 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
 
     selector.innerHTML = '';
 
-    // 1. Siempre incluir el Espacio Personal
+    // 1. Espacio Personal limpio sin el nombre de usuario
     const optPersonal = document.createElement('option');
     optPersonal.value = "personal";
-    optPersonal.textContent = `🏠 Mi Espacio Personal (${user.email.split('@')[0]})`;
+    optPersonal.textContent = `🏠 Mi Espacio Personal`;
     selector.appendChild(optPersonal);
 
     try {
         const emailActual = user.email.toLowerCase();
 
-        // 2. Buscar únicamente invitaciones en estado ACEPTADO para este correo
+        // 2. Mapear invitaciones ACEPTADAS para extraer el remitente (quien invitó)
         const qAceptados = query(
             collection(db, "invitaciones"),
             where("destinatarioEmail", "==", emailActual),
@@ -196,15 +196,20 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
         );
         const snapAceptados = await getDocs(qAceptados);
         
-        const gruposPermitidosIds = new Set();
+        const mapaInvitantes = {}; // { grupoId: "remitenteEmail" }
         snapAceptados.forEach(d => {
-            const gId = d.data().grupoId;
-            if (gId) gruposPermitidosIds.add(gId);
+            const data = d.data();
+            if (data.grupoId) {
+                mapaInvitantes[data.grupoId] = data.remitenteEmail;
+            }
         });
 
-        // 3. Revisar en app_data si el usuario es miembro activo
+        const gruposPermitidosIds = new Set(Object.keys(mapaInvitantes));
+
+        // 3. Consultar documentos en app_data para los grupos donde el usuario es miembro directo o creador
         const querySnapshot = await getDocs(collection(db, "app_data"));
-        
+        const mapaCreadores = {};
+
         querySnapshot.forEach((docSnap) => {
             if (docSnap.id.startsWith("personal_")) return;
 
@@ -213,16 +218,44 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
 
             if (grupoInfo) {
                 const miembros = grupoInfo.miembros || {};
-                
-                // Verificar si el UID o el Email coinciden en la lista de miembros
                 const esMiembroUID = miembros[user.uid] !== undefined;
                 const esMiembroEmail = Object.values(miembros).some(m => (m.email || "").toLowerCase() === emailActual);
 
-                if (esMiembroUID || esMiembroEmail) {
+                if (esMiembroUID || esMiembroEmail || gruposPermitidosIds.has(docSnap.id)) {
                     gruposPermitidosIds.add(docSnap.id);
+                    // Guardamos el admin creador como fallback si no proviene de una invitación registrada
+                    if (grupoInfo.adminUid && miembros[grupoInfo.adminUid]) {
+                        mapaCreadores[docSnap.id] = miembros[grupoInfo.adminUid].email;
+                    }
                 }
             }
         });
+
+        // 4. Renderizar las opciones agregando entre paréntesis el usuario que invitó o creó el grupo
+        for (const grupoId of gruposPermitidosIds) {
+            const grupoRef = doc(db, "app_data", grupoId);
+            const grupoSnap = await getDoc(grupoRef);
+
+            if (grupoSnap.exists()) {
+                const docData = grupoSnap.data();
+                const grupoInfo = docData.appState?.grupoInfo;
+
+                // Identificar el email a mostrar entre paréntesis
+                let hostEmail = mapaInvitantes[grupoId] || mapaCreadores[grupoId] || '';
+                let usuarioTag = hostEmail ? ` (${hostEmail.split('@')[0]})` : '';
+
+                const optGrupo = document.createElement('option');
+                optGrupo.value = grupoId;
+                optGrupo.textContent = `👥 ${grupoInfo?.nombreGrupo || 'Grupo Control de Gastos'}${usuarioTag}`;
+                selector.appendChild(optGrupo);
+            }
+        }
+    } catch (e) {
+        console.error("Error al poblar los grupos en el selector:", e);
+    }
+
+    selector.value = vistaSeleccionadaActual || "personal";
+};
 
         // 4. Cargar sólo las opciones válidas sin duplicados
         for (const grupoId of gruposPermitidosIds) {
