@@ -84,24 +84,20 @@ window.esUsuarioEditor = function() {
     const user = auth.currentUser;
     if (!user) return false;
     
-    // Si es el administrador principal
     if (user.email === "nicolaslmancuso@gmail.com") {
         return true;
     }
 
     const grupoInfo = window.appState?.grupoInfo;
     
-    // Si es un espacio personal puro y el usuario es el dueño absoluto
     if (!window.currentGrupo || window.currentGrupo === `personal_${user.uid}`) {
         return true;
     }
 
     if (!grupoInfo) return false;
 
-    // Si es el adminUid del grupo
     if (grupoInfo.adminUid === user.uid) return true;
 
-    // Buscar al miembro por UID o por Email
     const miembros = grupoInfo.miembros || {};
     const emailActual = user.email.toLowerCase();
     
@@ -115,25 +111,12 @@ window.esUsuarioEditor = function() {
         }
     }
 
-    // Si explícitamente es lector, retorna false
     if (rolMiembro === 'lector') {
         return false;
     }
 
     return rolMiembro !== 'lector';
 };
-
-// ==========================================
-// MODAL GENÉRICO DE ADVERTENCIA
-// ==========================================
-
-function mostrarMensajeApp(titulo, mensaje) {
-    if (typeof window.mostrarModalAlert === 'function') {
-        window.mostrarModalAlert(titulo, mensaje);
-    } else if (typeof window.showToast === 'function') {
-        window.showToast(mensaje, 'warning');
-    }
-}
 
 // ==========================================
 // APLICACIÓN DE ESTILOS Y RESTRICCIONES VISUALES
@@ -151,7 +134,6 @@ function aplicarRestriccionesInterfaz() {
 
     if (!esEditor) {
         styleTag.innerHTML = `
-            /* Ocultar botones de editar, eliminar, crear en toda la app para lectores */
             button[onclick*="edit"], 
             button[onclick*="delete"], 
             button[onclick*="openModal"],
@@ -161,7 +143,6 @@ function aplicarRestriccionesInterfaz() {
             button i.fa-pen, button i.fa-trash-can, button i.fa-trash {
                 display: none !important;
             }
-            /* Deshabilitar selects, inputs, calendarios, fechas de vencimiento y ordenamiento */
             select, input, textarea, 
             [onclick*="sort"], [onclick*="ordenar"], th.cursor-pointer,
             input[type="date"], .fecha-vencimiento {
@@ -208,7 +189,7 @@ observer.observe(document.body, { childList: true, subtree: true });
 
 const verificarEscritura = () => {
     if (!window.esUsuarioEditor()) {
-        mostrarMensajeApp("Acceso Restringido", "Modo Lector: No tienes permisos para realizar modificaciones en este grupo.");
+        window.mostrarNotificacion("Acceso Restringido", "Modo Lector: No tienes permisos para realizar modificaciones en este grupo.", "error");
         return false;
     }
     return true;
@@ -232,36 +213,6 @@ if (typeof window.deleteGasto === 'function') {
 }
 
 // ==========================================
-// DETECCIÓN GLOBAL DE CAMBIO DE ROL EN SELECTORES
-// ==========================================
-
-document.addEventListener('change', function(e) {
-    const target = e.target;
-    // Si el select es el encargado de cambiar el rol (por atributo onchange, clase o estructura del modal de grupo)
-    if (target && target.tagName === 'SELECT' && (
-        target.getAttribute('onchange')?.includes('cambiarRolMiembro') || 
-        target.classList.contains('select-rol') ||
-        target.closest('.modal-grupo-miembros') ||
-        target.outerHTML.includes('cambiarRolMiembro')
-    )) {
-        // Intentar extraer el UID del miembro desde el atributo onchange o dataset
-        const onchangeAttr = target.getAttribute('onchange') || '';
-        let uidMiembro = target.dataset.uid || target.getAttribute('data-uid');
-        
-        if (!uidMiembro && onchangeAttr) {
-            // Extraer primer parámetro entre comillas o sin comillas de cambiarRolMiembro(...)
-            const match = onchangeAttr.match(/cambiarRolMiembro\s*\(\s*['"]?([^'",\s]+)['"]?/);
-            if (match) uidMiembro = match[1];
-        }
-
-        const nuevoRol = target.value;
-        if (uidMiembro && nuevoRol) {
-            window.cambiarRolMiembro(uidMiembro, nuevoRol);
-        }
-    }
-});
-
-// ==========================================
 // PERSISTENCIA DE CAMBIO DE ROL DIRECTA CON SPINNER
 // ==========================================
 
@@ -282,7 +233,9 @@ window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
         let grupoId = grupoInfo?.id || grupoInfo?.grupoId;
         
         if (!grupoId || grupoId.startsWith('personal_')) {
-            if (window.appState?.grupos && window.appState.grupos.length > 0) {
+            if (window.currentGrupo && !window.currentGrupo.startsWith('personal_')) {
+                grupoId = window.currentGrupo;
+            } else if (window.appState?.grupos && window.appState.grupos.length > 0) {
                 const grupoCompartido = window.appState.grupos.find(g => g.id && !g.id.startsWith('personal_'));
                 if (grupoCompartido) grupoId = grupoCompartido.id;
             }
@@ -290,7 +243,7 @@ window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
 
         if (!grupoId || grupoId.startsWith('personal_')) {
             if (loaderDiv) loaderDiv.style.display = 'none';
-            mostrarMensajeApp("Atención", "No se encontró un grupo compartido activo para modificar roles.");
+            window.mostrarNotificacion("Atención", "No se encontró un grupo compartido activo para modificar roles.", "info");
             return;
         }
 
@@ -299,15 +252,17 @@ window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
                 window.appState.grupoInfo.miembros[uidMiembro].rol = nuevoRol;
             }
             
-            await db.collection('grupos').doc(grupoId).update({
+            await updateDoc(doc(db, "grupos", grupoId), {
                 [`miembros.${uidMiembro}.rol`]: nuevoRol
             });
 
+            await setDoc(doc(db, "app_data", grupoId), {
+                appState: JSON.parse(JSON.stringify(window.appState))
+            }, { merge: true });
+
             console.log(`Rol actualizado en Firebase para ${uidMiembro} -> ${nuevoRol}`);
             
-            if (typeof window.showToast === 'function') {
-                window.showToast(`Rol actualizado a ${nuevoRol.toUpperCase()} correctamente`, 'success');
-            }
+            window.mostrarNotificacion("¡Éxito!", `Rol actualizado a ${nuevoRol.toUpperCase()} correctamente.`, "exito");
 
             if (typeof window.renderModalGrupo === 'function') {
                 window.renderModalGrupo();
@@ -317,7 +272,7 @@ window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
         }
     } catch (error) {
         console.error("Error al actualizar el rol en Firebase:", error);
-        mostrarMensajeApp("Error", "Hubo un problema al guardar el cambio de rol en la base de datos.");
+        window.mostrarNotificacion("Error", "Hubo un problema al guardar el cambio de rol en la base de datos.", "error");
     } finally {
         if (loaderDiv) {
             loaderDiv.style.display = 'none';
