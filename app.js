@@ -315,30 +315,37 @@ window.cambiarVistaSeleccionada = async function(vistaId) {
     });
 };
 
-// Observador de Autenticación con Validación Estricta de Verificación
+// Observador de Autenticación con Manejo Persistente de Verificación
 onAuthStateChanged(auth, async (user) => {
     if (user) {
+        const userDocRef = doc(db, "app_data", `personal_${user.uid}`);
         const urlParams = new URLSearchParams(window.location.search);
         const isVerifiedFromUrl = urlParams.get('verified') === 'true';
-        const userDocRef = doc(db, "app_data", `personal_${user.uid}`);
 
-        // Si el usuario hace clic en el enlace del mail, marcamos su cuenta como verificada en Firestore
+        // 1. Si la URL trae la marca de verificación, actualizamos Firestore y guardamos marca local
         if (isVerifiedFromUrl) {
             try {
                 await updateDoc(userDocRef, { emailVerificado: true });
+                localStorage.setItem(`verified_${user.uid}`, 'true');
+                // Limpiamos los parámetros de la URL para dejarla limpia
+                window.history.replaceState({}, document.title, window.location.pathname);
             } catch (e) {
-                console.log("Actualizando estado verificado...");
+                console.log("Error al actualizar verificación en Firestore:", e);
             }
         }
 
-        // Consultamos el documento del usuario para saber si está verificado
-        const userDocSnap = await getDoc(userDocRef);
-        let estaVerificado = false;
-        if (userDocSnap.exists()) {
-            estaVerificado = userDocSnap.data().emailVerificado === true;
+        // 2. Verificar el estado en Firestore o LocalStorage
+        let estaVerificado = localStorage.getItem(`verified_${user.uid}`) === 'true';
+        
+        if (!estaVerificado) {
+            const userDocSnap = await getDoc(userDocRef);
+            if (userDocSnap.exists() && userDocSnap.data().emailVerificado === true) {
+                estaVerificado = true;
+                localStorage.setItem(`verified_${user.uid}`, 'true');
+            }
         }
 
-        // Si no está verificado, le bloqueamos el acceso y lo sacamos
+        // 3. Si no está verificado, cerramos sesión y mostramos alerta
         if (!estaVerificado) {
             alert("Tu cuenta aún no ha sido verificada. Por favor hacé clic en el botón del correo que te enviamos para poder ingresar.");
             await signOut(auth);
@@ -346,6 +353,7 @@ onAuthStateChanged(auth, async (user) => {
             return;
         }
 
+        // 4. Si está verificado, continuar con la carga normal de la app
         window.showLoading();
         const dLocal = new Date();
         const currentLocalMonthStr = `${dLocal.getFullYear()}-${String(dLocal.getMonth() + 1).padStart(2, '0')}`;
