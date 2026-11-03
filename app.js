@@ -121,7 +121,6 @@ window.esUsuarioEditor = function() {
 function aplicarRestriccionesInterfaz() {
     const esEditor = window.esUsuarioEditor();
 
-    // Inyectar o actualizar estilo CSS global para ocultar acciones de lectores si es necesario
     let styleTag = document.getElementById('estilos-modo-lector');
     if (!styleTag) {
         styleTag = document.createElement('style');
@@ -129,7 +128,7 @@ function aplicarRestriccionesInterfaz() {
         document.head.appendChild(styleTag);
     }
 
-if (!esEditor) {
+    if (!esEditor) {
         styleTag.innerHTML = `
             /* Ocultar botones de editar, eliminar, crear en toda la app para lectores */
             button[onclick*="edit"], 
@@ -153,7 +152,6 @@ if (!esEditor) {
         styleTag.innerHTML = '';
     }
 
-    // Ocultar también explícitamente por DOM botones específicos por texto o atributos
     const botones = document.querySelectorAll('button');
     botones.forEach(btn => {
         const txt = btn.textContent.toLowerCase();
@@ -163,7 +161,7 @@ if (!esEditor) {
     });
 }
 
-// Interceptar renderizado global para asegurar que se aplique siempre
+// Interceptar renderizado global
 const originalRenderApp = window.renderApp || function(){};
 window.renderApp = function() {
     if (typeof originalRenderApp === 'function') {
@@ -172,12 +170,10 @@ window.renderApp = function() {
     setTimeout(aplicarRestriccionesInterfaz, 100);
 };
 
-// Ejecutar al cargar y periódicamente ante cambios de DOM
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(aplicarRestriccionesInterfaz, 500);
 });
 
-// Observer para re-aplicar restricciones si la interfaz se redibuja dinámicamente
 const observer = new MutationObserver(() => {
     if (!window.esUsuarioEditor()) {
         aplicarRestriccionesInterfaz();
@@ -211,6 +207,54 @@ if (typeof window.saveGasto === 'function') {
 if (typeof window.deleteGasto === 'function') {
     const orig = window.deleteGasto;
     window.deleteGasto = function(...args) { if (!verificarEscritura()) return; return orig.apply(this, args); };
+}
+
+// ==========================================
+// PERSISTENCIA DE CAMBIO DE ROL Y MODAL
+// ==========================================
+window.cambiarRolMiembro = function(uidMiembro, nuevoRol) {
+    // Si existe la función de modal por defecto en la app, la invocamos
+    if (typeof window.mostrarModalConfirmacion === 'function') {
+        window.mostrarModalConfirmacion(
+            "Cambiar permisos", 
+            `¿Estás seguro de cambiar el rol de este integrante a ${nuevoRol.toUpperCase()}?`, 
+            () => ejecutarCambioRolFirebase(uidMiembro, nuevoRol)
+        );
+    } else {
+        // Fallback nativo si el modal global no está disponible en el scope
+        if (confirm(`¿Estás seguro de cambiar el rol de este integrante a ${nuevoRol.toUpperCase()}?`)) {
+            ejecutarCambioRolFirebase(uidMiembro, nuevoRol);
+        }
+    }
+};
+
+async function ejecutarCambioRolFirebase(uidMiembro, nuevoRol) {
+    try {
+        const grupoId = window.currentGrupo;
+        if (!grupoId || grupoId.startsWith('personal_')) {
+            alert("No se puede modificar roles en un espacio personal.");
+            return;
+        }
+
+        // Actualizar en Firestore la estructura del grupo
+        if (typeof db !== 'undefined' && window.appState?.grupoInfo) {
+            window.appState.grupoInfo.miembros[uidMiembro].rol = nuevoRol;
+            
+            await db.collection('grupos').doc(grupoId).update({
+                [`miembros.${uidMiembro}.rol`]: nuevoRol
+            });
+
+            console.log(`Rol actualizado exitosamente para ${uidMiembro} a ${nuevoRol}`);
+            if (typeof window.renderModalGrupo === 'function') {
+                window.renderModalGrupo();
+            } else if (typeof window.renderApp === 'function') {
+                window.renderApp();
+            }
+        }
+    } catch (error) {
+        console.error("Error al actualizar el rol en Firebase:", error);
+        alert("Hubo un error al guardar el cambio de rol en la base de datos.");
+    }
 }
 
 const categoriasDefault = [
