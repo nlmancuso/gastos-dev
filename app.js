@@ -613,21 +613,32 @@ window.responderInvitacion = async function(invitacionId, grupoId, rol, nuevoEst
         const invRef = doc(db, "invitaciones", invitacionId);
         await updateDoc(invRef, { estado: nuevoEstado });
 
-        if (nuevoEstado === 'ACEPTADO') {
-            const grupoRef = doc(db, "app_data", grupoId);
-            const grupoSnap = await getDoc(grupoRef);
+        const grupoRef = doc(db, "app_data", grupoId);
+        const grupoSnap = await getDoc(grupoRef);
 
-            if (grupoSnap.exists()) {
-                const data = grupoSnap.data();
-                const appState = data.appState || {};
-                const grupoInfo = appState.grupoInfo || { miembros: {} };
-                
-                if (!grupoInfo.miembros) grupoInfo.miembros = {};
-                grupoInfo.miembros[user.uid] = { email: user.email, rol: rol };
-
-                await updateDoc(grupoRef, { "appState.grupoInfo": grupoInfo });
+        if (grupoSnap.exists()) {
+            const data = grupoSnap.data();
+            const appState = data.appState || {};
+            const grupoInfo = appState.grupoInfo || { miembros: {}, invitacionesPendientes: [] };
+            
+            if (!grupoInfo.miembros) grupoInfo.miembros = {};
+            
+            // 1. Limpiar la invitación pendiente del arreglo del grupo para que desaparezca del panel del admin
+            if (grupoInfo.invitacionesPendientes) {
+                grupoInfo.invitacionesPendientes = grupoInfo.invitacionesPendientes.filter(
+                    inv => inv.email.toLowerCase() !== user.email.toLowerCase()
+                );
             }
 
+            if (nuevoEstado === 'ACEPTADO') {
+                // 2. Agregar a la lista de miembros activos
+                grupoInfo.miembros[user.uid] = { email: user.email, rol: rol };
+            }
+
+            await updateDoc(grupoRef, { "appState.grupoInfo": grupoInfo });
+        }
+
+        if (nuevoEstado === 'ACEPTADO') {
             window.mostrarNotificacion("¡Unión exitosa!", "Te uniste al grupo con éxito.", "exito", async () => {
                 await window.poblarSelectorVistas(grupoId);
                 window.cambiarVistaSeleccionada(grupoId);
