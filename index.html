@@ -129,6 +129,21 @@
         <i class="fa-solid fa-users text-sm"></i>
     </button>
 
+    <!-- Botón de Notificaciones / Invitaciones -->
+    <div class="relative">
+        <button onclick="toggleBandejaNotificaciones()" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl relative transition-colors" title="Invitaciones a grupos">
+            <i class="fa-solid fa-bell"></i>
+            <span id="badgeNotificaciones" class="absolute -top-1 -right-1 bg-amber-500 text-slate-950 text-[10px] font-bold px-1.5 py-0.2 rounded-full hidden">0</span>
+        </button>
+        <!-- Dropdown de notificaciones -->
+        <div id="dropdownNotificaciones" class="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-3 hidden z-50 space-y-2">
+            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider px-2">Invitaciones a Grupos</h4>
+            <div id="listaNotificaciones" class="space-y-1.5 max-h-60 overflow-y-auto">
+                <p class="text-xs text-slate-500 text-center py-2">No tenés notificaciones pendientes.</p>
+            </div>
+        </div>
+    </div>
+
     <button onclick="cerrarSesion()" class="p-2.5 rounded-lg card-bg text-slate-400 hover:text-rose-400 transition" title="Cerrar Sesión">
         <i class="fa-solid fa-right-from-bracket text-sm"></i>
     </button>
