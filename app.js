@@ -67,7 +67,7 @@ window.cerrarModalNotificacion = function() {
     }
 };
 
-// Control de Permisos por Rol (Editor vs Lector)[cite: 8]
+// Control de Permisos por Rol (Editor vs Lector)
 window.esUsuarioEditor = function() {
     const user = auth.currentUser;
     if (!user) return false;
@@ -401,7 +401,7 @@ window.cerrarSesion = function() {
     signOut(auth);
 };
 
-// Verificación sincronizada en Firestore[cite: 1]
+// Verificación sincronizada en Firestore
 async function verificarDesdeURL() {
     const urlParams = new URLSearchParams(window.location.search);
     const isVerified = urlParams.get('verified') === 'true';
