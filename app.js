@@ -179,16 +179,14 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
 
     selector.innerHTML = '';
 
+    // 1. Siempre incluir el Espacio Personal
     const optPersonal = document.createElement('option');
     optPersonal.value = "personal";
     optPersonal.textContent = `🏠 Mi Espacio Personal (${user.email.split('@')[0]})`;
     selector.appendChild(optPersonal);
 
     try {
-        // Usamos un Set para asegurarnos de que ningún ID de grupo se repita en el selector
-        const gruposAgregadosIds = new Set();
-
-        // 1. Obtener invitaciones aceptadas de este usuario
+        // 2. Buscar únicamente las invitaciones ACEPTADAS por este correo
         const qAceptados = query(
             collection(db, "invitaciones"),
             where("destinatarioEmail", "==", user.email.toLowerCase()),
@@ -196,12 +194,13 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
         );
         const snapAceptados = await getDocs(qAceptados);
         
+        const gruposPermitidosIds = new Set();
         snapAceptados.forEach(d => {
             const gId = d.data().grupoId;
-            if (gId) gruposAgregadosIds.add(gId);
+            if (gId) gruposPermitidosIds.add(gId);
         });
 
-        // 2. Consultar todos los documentos de app_data
+        // 3. Revisar en app_data si el usuario figura explícitamente en el mapa de miembros de algún grupo
         const querySnapshot = await getDocs(collection(db, "app_data"));
         
         querySnapshot.forEach((docSnap) => {
@@ -210,21 +209,17 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
             const docData = docSnap.data();
             const grupoInfo = docData.appState?.grupoInfo;
 
-            if (grupoInfo) {
-                const miembros = grupoInfo.miembros || {};
-                const esMiembroDirecto = miembros[user.uid] !== undefined;
-                const esInvitacionAceptada = gruposAgregadosIds.has(docSnap.id);
-                const esAdminCreador = grupoInfo.adminUid === user.uid;
-
-                // Si el usuario participa y el grupo todavía no fue agregado al combo
-                if ((esMiembroDirecto || esInvitacionAceptada || esAdminCreador) && !gruposAgregadosIds.has(docSnap.id)) {
-                    gruposAgregadosIds.add(docSnap.id);
+            if (grupoInfo && grupoInfo.miembros) {
+                // Verificar si el UID del usuario logueado está dentro de los miembros
+                const esMiembroRegistrado = grupoInfo.miembros[user.uid] !== undefined;
+                if (esMiembroRegistrado) {
+                    gruposPermitidosIds.add(docSnap.id);
                 }
             }
         });
 
-        // 3. Renderizar las opciones únicas en el selector
-        for (const grupoId of gruposAgregadosIds) {
+        // 4. Poblar el combo ÚNICAMENTE con los grupos donde es miembro activo
+        for (const grupoId of gruposPermitidosIds) {
             const grupoRef = doc(db, "app_data", grupoId);
             const grupoSnap = await getDoc(grupoRef);
 
