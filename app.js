@@ -185,35 +185,49 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     selector.appendChild(optPersonal);
 
     try {
+        // 1. Buscar las invitaciones aceptadas de este usuario para obtener los IDs de grupo exactos
         const qAceptados = query(
             collection(db, "invitaciones"),
             where("destinatarioEmail", "==", user.email.toLowerCase()),
             where("estado", "==", "ACEPTADO")
         );
         const snapAceptados = await getDocs(qAceptados);
-        const gruposAceptadosIds = new Set();
-        snapAceptados.forEach(d => gruposAceptadosIds.add(d.data().grupoId));
-
-        const querySnapshot = await getDocs(collection(db, "app_data"));
         
-        querySnapshot.forEach((docSnap) => {
-            if (docSnap.id.startsWith("personal_")) return;
+        const gruposAceptadosIds = [];
+        snapAceptados.forEach(d => {
+            if (d.data().grupoId) gruposAceptadosIds.push(d.data().grupoId);
+        });
 
-            const docData = docSnap.data();
-            const grupoInfo = docData.appState?.grupoInfo;
+        // 2. Consultar individualmente cada documento de grupo al que pertenece
+        for (const grupoId of gruposAceptadosIds) {
+            const grupoRef = doc(db, "app_data", grupoId);
+            const grupoSnap = await getDoc(grupoRef);
 
-            const esMiembroAceptado = gruposAceptadosIds.has(docSnap.id);
-            const esMiembroDirecto = grupoInfo?.miembros && grupoInfo.miembros[user.uid] !== undefined;
-            const esAdminCreador = grupoInfo && grupoInfo.adminUid === user.uid;
-            const esMaster = user.email === "nicolaslmancuso@gmail.com";
-
-            if (esMiembroAceptado || esMiembroDirecto || esAdminCreador || esMaster) {
+            if (grupoSnap.exists()) {
+                const docData = grupoSnap.data();
+                const grupoInfo = docData.appState?.grupoInfo;
+                
                 const optGrupo = document.createElement('option');
-                optGrupo.value = docSnap.id;
+                optGrupo.value = grupoId;
                 optGrupo.textContent = `👥 ${grupoInfo?.nombreGrupo || 'Grupo Control de Gastos'}`;
                 selector.appendChild(optGrupo);
             }
-        });
+        }
+
+        // 3. Si el usuario es el administrador principal o creador, asegurar su visualización
+        if (user.email === "nicolaslmancuso@gmail.com") {
+            const querySnapshot = await getDocs(collection(db, "app_data"));
+            querySnapshot.forEach((docSnap) => {
+                if (!docSnap.id.startsWith("personal_") && !gruposAceptadosIds.includes(docSnap.id)) {
+                    const docData = docSnap.data();
+                    const grupoInfo = docData.appState?.grupoInfo;
+                    const optGrupo = document.createElement('option');
+                    optGrupo.value = docSnap.id;
+                    optGrupo.textContent = `👥 ${grupoInfo?.nombreGrupo || 'Grupo Control de Gastos'}`;
+                    selector.appendChild(optGrupo);
+                }
+            });
+        }
     } catch (e) {
         console.error("Error al poblar los grupos en el selector:", e);
     }
