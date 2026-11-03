@@ -115,77 +115,100 @@ window.esUsuarioEditor = function() {
 };
 
 // ==========================================
-// APLICACIÓN DE INTERFAZ SEGÚN PERMISOS
+// APLICACIÓN DE ESTILOS Y RESTRICCIONES VISUALES
 // ==========================================
 
 function aplicarRestriccionesInterfaz() {
     const esEditor = window.esUsuarioEditor();
 
-    // 1. Ocultar el botón principal "+ Nuevo Gasto"
-    const btnNuevoGasto = document.querySelector('button[onclick*="openModalGasto"], button#btnNuevoGasto, .btn-nuevo-gasto');
-    // Búsqueda más genérica por texto si no encuentra el selector exacto
-    const botonesCabecera = document.querySelectorAll('button');
-    botonesCabecera.forEach(btn => {
-        if (btn.textContent.includes('Nuevo Gasto')) {
-            btn.style.display = esEditor ? 'flex' : 'none';
-        }
-    });
+    // Inyectar o actualizar estilo CSS global para ocultar acciones de lectores si es necesario
+    let styleTag = document.getElementById('estilos-modo-lector');
+    if (!styleTag) {
+        styleTag = document.createElement('style');
+        styleTag.id = 'estilos-modo-lector';
+        document.head.appendChild(styleTag);
+    }
 
-    // 2. Ocultar el botón superior de "Nueva Cuenta" en Bancos
-    const botonesCuenta = document.querySelectorAll('button');
-    botonesCuenta.forEach(btn => {
-        if (btn.textContent.includes('Nueva Cuenta') || btn.textContent.includes('Agregar Cuenta')) {
+    if (!esEditor) {
+        styleTag.innerHTML = `
+            /* Ocultar botones de editar, eliminar, crear en toda la app para lectores */
+            button[onclick*="edit"], 
+            button[onclick*="delete"], 
+            button[onclick*="openModal"],
+            button[onclick*="NuevaCuenta"],
+            button[onclick*="Gasto"],
+            .btn-editar, .btn-eliminar, .btn-nuevo,
+            button i.fa-pen, button i.fa-trash-can, button i.fa-trash {
+                display: none !important;
+            }
+            /* Deshabilitar selects de estado y otros campos interactivos */
+            select, input, textarea {
+                pointer-events: none !important;
+                opacity: 0.9;
+            }
+        `;
+    } else {
+        styleTag.innerHTML = '';
+    }
+
+    // Ocultar también explícitamente por DOM botones específicos por texto o atributos
+    const botones = document.querySelectorAll('button');
+    botones.forEach(btn => {
+        const txt = btn.textContent.toLowerCase();
+        if (txt.includes('nuevo gasto') || txt.includes('nueva cuenta') || txt.includes('agregar')) {
             btn.style.display = esEditor ? 'flex' : 'none';
         }
     });
 }
 
-// Ejecutar cada vez que se actualice la vista o se renderice
+// Interceptar renderizado global para asegurar que se aplique siempre
 const originalRenderApp = window.renderApp || function(){};
 window.renderApp = function() {
     if (typeof originalRenderApp === 'function') {
         originalRenderApp();
     }
-    aplicarRestriccionesInterfaz();
+    setTimeout(aplicarRestriccionesInterfaz, 100);
 };
 
-// También aplicar al cargar la página y al cambiar de grupo
+// Ejecutar al cargar y periódicamente ante cambios de DOM
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(aplicarRestriccionesInterfaz, 500);
 });
 
-// Interceptar funciones de modificación si es lector
+// Observer para re-aplicar restricciones si la interfaz se redibuja dinámicamente
+const observer = new MutationObserver(() => {
+    if (!window.esUsuarioEditor()) {
+        aplicarRestriccionesInterfaz();
+    }
+});
+observer.observe(document.body, { childList: true, subtree: true });
+
+// ==========================================
+// INTERCEPTAR FUNCIONES DE ESCRITURA
+// ==========================================
 const verificarEscritura = () => {
     if (!window.esUsuarioEditor()) {
-        alert("No tienes permisos de edición en este grupo (Modo Lector).");
+        alert("Modo Lector: No tienes permisos para realizar modificaciones en este grupo.");
         return false;
     }
     return true;
 };
 
-// Envolver funciones críticas de modificación de cuentas/bancos y gastos si existen
 if (typeof window.saveCuenta === 'function') {
-    const originalSaveCuenta = window.saveCuenta;
-    window.saveCuenta = function(...args) {
-        if (!verificarEscritura()) return;
-        return originalSaveCuenta.apply(this, args);
-    };
+    const orig = window.saveCuenta;
+    window.saveCuenta = function(...args) { if (!verificarEscritura()) return; return orig.apply(this, args); };
 }
-
 if (typeof window.deleteCuenta === 'function') {
-    const originalDeleteCuenta = window.deleteCuenta;
-    window.deleteCuenta = function(...args) {
-        if (!verificarEscritura()) return;
-        return originalDeleteCuenta.apply(this, args);
-    };
+    const orig = window.deleteCuenta;
+    window.deleteCuenta = function(...args) { if (!verificarEscritura()) return; return orig.apply(this, args); };
 }
-
 if (typeof window.saveGasto === 'function') {
-    const originalSaveGasto = window.saveGasto;
-    window.saveGasto = function(...args) {
-        if (!verificarEscritura()) return;
-        return originalSaveGasto.apply(this, args);
-    };
+    const orig = window.saveGasto;
+    window.saveGasto = function(...args) { if (!verificarEscritura()) return; return orig.apply(this, args); };
+}
+if (typeof window.deleteGasto === 'function') {
+    const orig = window.deleteGasto;
+    window.deleteGasto = function(...args) { if (!verificarEscritura()) return; return orig.apply(this, args); };
 }
 
 const categoriasDefault = [
