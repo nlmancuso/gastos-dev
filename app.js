@@ -229,32 +229,30 @@ window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
     }
 
     try {
-        // 1. Obtener el grupoId de la vista seleccionada en el desplegable o del estado global
+        // 1. Detectar el ID del grupo desde la referencia activa o el selector superior
+        let grupoId = window.docRef?.id || window.currentGrupo;
+        
         const selector = document.getElementById('selectorVista');
-        let grupoId = selector ? selector.value : window.currentGrupo;
-
-        if (!grupoId || grupoId === 'personal' || grupoId.startsWith('personal_')) {
-            grupoId = window.currentGrupo;
+        if (selector && selector.value && !selector.value.startsWith('personal')) {
+            grupoId = selector.value;
         }
 
-        // 2. Si sigue siendo espacio personal, no se pueden editar roles de grupo
-        if (!grupoId || grupoId === 'personal' || grupoId.startsWith('personal_')) {
+        // 2. Validar que realmente sea un grupo compartido (que no comience con personal_)
+        if (!grupoId || grupoId.startsWith('personal_')) {
             if (loaderDiv) loaderDiv.style.display = 'none';
             window.mostrarNotificacion(
                 "Atención", 
-                "Debes seleccionar un grupo compartido activo en el menú superior para modificar los roles de sus miembros.", 
+                "Estás en 'Mi Espacio Personal'. Para cambiar roles, selecciona tu grupo compartido en el menú desplegable superior de la pantalla principal.", 
                 "info"
             );
             return;
         }
 
         if (typeof db !== 'undefined') {
-            // Actualización local en appState
             if (window.appState?.grupoInfo?.miembros?.[uidMiembro]) {
                 window.appState.grupoInfo.miembros[uidMiembro].rol = nuevoRol;
             }
             
-            // Actualización directa en la colección de Firestore
             await updateDoc(doc(db, "app_data", grupoId), {
                 [`appState.grupoInfo.miembros.${uidMiembro}.rol`]: nuevoRol
             });
