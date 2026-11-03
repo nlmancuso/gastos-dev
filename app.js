@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, addDoc, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, getDocs, onSnapshot, collection, addDoc, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -185,24 +185,30 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     selector.appendChild(optPersonal);
 
     try {
-        const grupoId = "T3E2kcXODg2OLm7i1Roq";
-        const grupoRef = doc(db, "app_data", grupoId);
-        const grupoSnap = await getDoc(grupoRef);
+        const querySnapshot = await getDocs(collection(db, "app_data"));
+        
+        querySnapshot.forEach((docSnap) => {
+            if (docSnap.id.startsWith("personal_")) return;
 
-        if (grupoSnap.exists()) {
-            const data = grupoSnap.data();
-            const miembros = data.appState?.grupoInfo?.miembros || {};
-            const esMiembro = miembros[user.uid] !== undefined || user.email === "nicolaslmancuso@gmail.com";
+            const docData = docSnap.data();
+            const grupoInfo = docData.appState?.grupoInfo;
 
-            if (esMiembro) {
-                const optGrupo = document.createElement('option');
-                optGrupo.value = grupoId;
-                optGrupo.textContent = `👥 Grupo Control de Gastos`;
-                selector.appendChild(optGrupo);
+            if (grupoInfo) {
+                const miembros = grupoInfo.miembros || {};
+                const esMiembro = miembros[user.uid] !== undefined;
+                const esAdminCreador = grupoInfo.adminUid === user.uid;
+                const esMaster = user.email === "nicolaslmancuso@gmail.com";
+
+                if (esMiembro || esAdminCreador || esMaster) {
+                    const optGrupo = document.createElement('option');
+                    optGrupo.value = docSnap.id;
+                    optGrupo.textContent = `👥 ${grupoInfo.nombreGrupo || 'Grupo Control de Gastos'}`;
+                    selector.appendChild(optGrupo);
+                }
             }
-        }
+        });
     } catch (e) {
-        console.error("Error al verificar membresía del grupo:", e);
+        console.error("Error al poblar los grupos en el selector:", e);
     }
 
     selector.value = vistaSeleccionadaActual || "personal";
@@ -255,7 +261,6 @@ window.handleLogin = async function(e) {
     }
 };
 
-// Registro con Envío de Verificación vía EmailJS (Plantilla Welcome)
 window.handleRegister = async function(e) {
     if (e) e.preventDefault();
     const emailEl = document.getElementById('registerEmail');
@@ -325,7 +330,6 @@ window.cerrarSesion = function() {
     signOut(auth);
 };
 
-// Procesar verificación instantánea al cargar la URL con parámetros
 function verificarDesdeURL() {
     const urlParams = new URLSearchParams(window.location.search);
     const isVerified = urlParams.get('verified') === 'true';
@@ -379,7 +383,6 @@ window.cambiarVistaSeleccionada = async function(vistaId) {
     });
 };
 
-// Observador de estado de sesión blindado con localStorage y Modales
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         window.showLoading();
