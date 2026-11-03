@@ -192,7 +192,6 @@ window.showApp = function() {
     if (appContent) appContent.classList.remove('hidden');
 };
 
-// Poblar selector de vistas con formato limpio y tag de invitante
 window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     const selector = document.getElementById('selectorVista');
     if (!selector) return;
@@ -200,13 +199,16 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     const user = auth.currentUser;
     if (!user) return;
 
-    const valorSeleccionado = vistaSeleccionadaActual || selector.value || "personal";
-    selector.innerHTML = '';
-
-    const optPersonal = document.createElement('option');
-    optPersonal.value = "personal";
-    optPersonal.textContent = "🏠 Mi Espacio Personal";
-    selector.appendChild(optPersonal);
+    // 1. Dejar una opción por defecto inmediata para que NUNCA aparezca vacío al cargar
+    const valorGuardadoPrevio = vistaSeleccionadaActual || localStorage.getItem("ultima_vista_id") || "personal";
+    
+    if (selector.options.length === 0) {
+        const optDefault = document.createElement('option');
+        optDefault.value = "personal";
+        optDefault.textContent = "🏠 Mi Espacio Personal";
+        selector.appendChild(optDefault);
+        selector.value = "personal";
+    }
 
     try {
         const emailActual = user.email.toLowerCase();
@@ -251,6 +253,14 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
             }
         });
 
+        // 2. Volvemos a construir las opciones limpias con todo ya cargado
+        selector.innerHTML = '';
+
+        const optPersonal = document.createElement('option');
+        optPersonal.value = "personal";
+        optPersonal.textContent = "🏠 Mi Espacio Personal";
+        selector.appendChild(optPersonal);
+
         for (const grupoId of gruposPermitidosIds) {
             const grupoRef = doc(db, "app_data", grupoId);
             const grupoSnap = await getDoc(grupoRef);
@@ -268,11 +278,15 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
                 selector.appendChild(optGrupo);
             }
         }
+
+        // 3. Forzar selección correcta asegurando que exista la opción
+        const existeOpcion = Array.from(selector.options).some(opt => opt.value === valorGuardadoPrevio);
+        selector.value = existeOpcion ? valorGuardadoPrevio : "personal";
+
     } catch (e) {
         console.error("Error al poblar los grupos en el selector:", e);
+        selector.value = "personal";
     }
-
-    selector.value = valorSeleccionado;
 };
 
 window.mostrarTabAuth = function(tab) {
