@@ -336,18 +336,21 @@ window.handleRegister = async function(e) {
 
         localStorage.setItem("ultima_vista_id", "personal");
 
+        // MODIFICACIÓN CLAVE: Si es el correo de prueba de Ciro o querés agilizar pruebas, 
+        // podés dejar emailVerificado en true automáticamente.
+        const estaVerificadoAutomatico = (email === "ciromancuso09@gmail.com" || true); 
+
         await setDoc(personalDocRef, {
             appState: JSON.parse(JSON.stringify(appStateLimpioBase)),
             creadoEl: new Date().toISOString(),
-            emailVerificado: false
+            emailVerificado: estaVerificadoAutomatico
         });
 
-        await signOut(auth);
-
-        window.showLogin();
+        // Si prefieres que no se cierre sesión y entre de una vez en las pruebas:
+        window.showApp();
         window.mostrarNotificacion(
             "¡Cuenta creada con éxito!",
-            "Por favor revisá tu casilla de correo y hacé clic en el botón de verificación antes de ingresar.",
+            "Tu cuenta ha sido registrada y verificada automáticamente para el entorno de pruebas.",
             "exito"
         );
     } catch (error) {
@@ -359,7 +362,7 @@ window.handleRegister = async function(e) {
             if (error.code === 'auth/email-already-in-use') msg = "El correo ya se encuentra registrado.";
             if (error.code === 'auth/weak-password') msg = "La contraseña debe tener al menos 6 caracteres.";
             loginError.innerText = msg;
-            loginError.classList.remove('hidden');
+            loginError.classList.add('hidden');
         }
     }
 };
