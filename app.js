@@ -369,19 +369,26 @@ window.cerrarSesion = function() {
     signOut(auth);
 };
 
-function verificarDesdeURL() {
+// Verificación sincronizada en Firestore[cite: 1]
+async function verificarDesdeURL() {
     const urlParams = new URLSearchParams(window.location.search);
     const isVerified = urlParams.get('verified') === 'true';
     const uid = urlParams.get('uid');
 
     if (isVerified && uid) {
-        localStorage.setItem(`verified_${uid}`, 'true');
-        window.mostrarNotificacion(
-            "¡Cuenta verificada con éxito!",
-            "Tu correo ha sido confirmado con éxito. Ya podés iniciar sesión.",
-            "exito",
-            () => { window.location.replace(window.location.pathname); }
-        );
+        try {
+            const personalDocRef = doc(db, "app_data", `personal_${uid}`);
+            await setDoc(personalDocRef, { emailVerificado: true }, { merge: true });
+
+            window.mostrarNotificacion(
+                "¡Cuenta verificada con éxito!",
+                "Tu correo ha sido confirmado con éxito. Ya podés iniciar sesión.",
+                "exito",
+                () => { window.location.replace(window.location.pathname); }
+            );
+        } catch (e) {
+            console.error("Error al actualizar verificación en base de datos:", e);
+        }
     }
 }
 
@@ -426,10 +433,22 @@ onAuthStateChanged(auth, async (user) => {
     if (user) {
         window.showLoading();
 
-        const estaVerificadoLocal = localStorage.getItem(`verified_${user.uid}`) === 'true';
         const esAdminPrincipal = user.email === "nicolaslmancuso@gmail.com";
+        let estaVerificado = esAdminPrincipal;
 
-        if (!estaVerificadoLocal && !esAdminPrincipal) {
+        if (!esAdminPrincipal) {
+            try {
+                const docRef = doc(db, "app_data", `personal_${user.uid}`);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    estaVerificado = docSnap.data().emailVerificado === true;
+                }
+            } catch (e) {
+                console.error("Error al verificar estado en Firestore:", e);
+            }
+        }
+
+        if (!estaVerificado) {
             await signOut(auth);
             window.showLogin();
             window.mostrarNotificacion(
@@ -623,7 +642,6 @@ window.responderInvitacion = async function(invitacionId, grupoId, rol, nuevoEst
             
             if (!grupoInfo.miembros) grupoInfo.miembros = {};
             
-            // 1. Limpiar la invitación pendiente del arreglo del grupo para que desaparezca del panel del admin
             if (grupoInfo.invitacionesPendientes) {
                 grupoInfo.invitacionesPendientes = grupoInfo.invitacionesPendientes.filter(
                     inv => inv.email.toLowerCase() !== user.email.toLowerCase()
@@ -631,7 +649,6 @@ window.responderInvitacion = async function(invitacionId, grupoId, rol, nuevoEst
             }
 
             if (nuevoEstado === 'ACEPTADO') {
-                // 2. Agregar a la lista de miembros activos
                 grupoInfo.miembros[user.uid] = { email: user.email, rol: rol };
             }
 
@@ -1178,17 +1195,12 @@ window.removerMiembroGrupo = function(uid) {
         async () => {
             try {
                 if (window.appState.grupoInfo && window.appState.grupoInfo.miembros) {
-                    // 1. Identificar el email del usuario que se va a remover
                     const miembroRemovido = window.appState.grupoInfo.miembros[uid];
                     const emailRemovido = miembroRemovido ? miembroRemovido.email : null;
 
-                    // 2. Eliminarlo del objeto de miembros local
                     delete window.appState.grupoInfo.miembros[uid];
-
-                    // 3. Guardar cambios en el documento del grupo en Firestore
                     await window.saveDataToCloud();
 
-                    // 4. Buscar y actualizar el estado de su invitación a RECHAZADO en Firestore
                     if (emailRemovido) {
                         const qInv = query(
                             collection(db, "invitaciones"),
