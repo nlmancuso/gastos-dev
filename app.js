@@ -215,7 +215,7 @@ window.handleLogin = async function(e) {
     }
 };
 
-// Registro con Envío de Correo de Verificación vía EmailJS
+// Registro con Envío de Correo de Verificación vía EmailJS y Control de Errores
 window.handleRegister = async function(e) {
     if (e) e.preventDefault();
     const emailEl = document.getElementById('registerEmail');
@@ -236,13 +236,20 @@ window.handleRegister = async function(e) {
         // 1. Definir enlace de verificación apuntando al GitHub Pages
         const linkVerificacion = `https://nlmancuso.github.io/gastos-dev/?uid=${user.uid}`;
 
-        // 2. Enviar correo usando EmailJS con la plantilla configurada
-        if (typeof emailjs !== 'undefined') {
-            await emailjs.send('service_hib3aln', 'template_9tbnrfg', {
-                to_email: email,
-                to_name: email.split('@')[0],
-                link_verificacion: linkVerificacion
-            });
+        // 2. Enviar correo usando EmailJS con manejo estricto de errores
+        try {
+            if (typeof emailjs !== 'undefined') {
+                const response = await emailjs.send('service_hib3aln', 'template_xaztoja', {
+                    to_email: email,
+                    to_name: email.split('@')[0],
+                    link_verificacion: linkVerificacion
+                });
+                console.log('¡EmailJS respondió con éxito!', response.status, response.text);
+            } else {
+                console.error('Error: El objeto emailjs no está definido en el navegador.');
+            }
+        } catch (emailError) {
+            console.error('Fallo crítico al intentar enviar por EmailJS:', emailError);
         }
 
         // 3. Crear su Espacio Personal en Firestore
@@ -256,10 +263,10 @@ window.handleRegister = async function(e) {
             creadoEl: new Date().toISOString()
         });
 
-        // 4. Cerrar sesión por seguridad hasta que verifique el mail
+        // 4. Cerrar sesión por seguridad
         await signOut(auth);
 
-        alert("¡Cuenta creada con éxito! Te hemos enviado un correo de verificación a través de EmailJS. Por favor confirma tu casilla antes de iniciar sesión.");
+        alert("¡Cuenta creada con éxito! Por favor revisá tu casilla de correo para verificar la cuenta antes de iniciar sesión.");
         window.showLogin();
     } catch (error) {
         console.error("Error al registrar usuario:", error);
