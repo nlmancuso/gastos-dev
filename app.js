@@ -72,22 +72,27 @@ window.esUsuarioEditor = function() {
     const user = auth.currentUser;
     if (!user) return false;
     
+    // Si sos vos el administrador principal
     if (user.email === "nicolaslmancuso@gmail.com") {
         return true;
     }
 
-    if (!window.currentGrupo || window.currentGrupo.startsWith("personal_")) {
+    const grupoInfo = window.appState?.grupoInfo;
+    
+    // Si es un espacio personal puro y el usuario es el dueño absoluto
+    if (!window.currentGrupo || window.currentGrupo === `personal_${user.uid}`) {
         return true;
     }
 
-    const grupoInfo = window.appState?.grupoInfo;
     if (!grupoInfo) return false;
 
+    // Si es el adminUid del grupo
     if (grupoInfo.adminUid === user.uid) return true;
 
+    // Buscar al miembro por UID o por Email
     const miembros = grupoInfo.miembros || {};
     const emailActual = user.email.toLowerCase();
-
+    
     let rolMiembro = null;
     if (miembros[user.uid]) {
         rolMiembro = miembros[user.uid].rol;
@@ -98,6 +103,7 @@ window.esUsuarioEditor = function() {
         }
     }
 
+    // Si explícitamente es lector, retorna false
     if (rolMiembro === 'lector') {
         return false;
     }
