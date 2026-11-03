@@ -281,21 +281,18 @@ window.cerrarSesion = function() {
 };
 
 // Procesar verificación automática desde la URL, guardar respaldo, avisar y recargar
-async function verificarDesdeURL() {
+// A. Verificación instantánea basada en localStorage al abrir el enlace del correo
+function verificarDesdeURL() {
     const urlParams = new URLSearchParams(window.location.search);
     const isVerified = urlParams.get('verified') === 'true';
     const uid = urlParams.get('uid');
 
     if (isVerified && uid) {
-        try {
-            const userDocRef = doc(db, "app_data", `personal_${uid}`);
-            await updateDoc(userDocRef, { emailVerificado: true });
-            localStorage.setItem(`verified_${uid}`, 'true');
-            alert("¡Cuenta verificada con éxito! Ya podés iniciar sesión.");
-            window.location.href = window.location.pathname;
-        } catch (e) {
-            console.error("Error actualizando verificación en Firestore:", e);
-        }
+        // Guardamos la marca de verificación en el navegador asociada a ese UID
+        localStorage.setItem(`verified_${uid}`, 'true');
+        alert("¡Cuenta verificada con éxito! Ya podés iniciar sesión.");
+        // Limpiamos la URL para dejarla prolija y recargamos
+        window.location.href = window.location.pathname;
     }
 }
 
@@ -342,16 +339,11 @@ onAuthStateChanged(auth, async (user) => {
     if (user) {
         window.showLoading();
 
-        const userDocRef = doc(db, "app_data", `personal_${user.uid}`);
-        const userDocSnap = await getDoc(userDocRef);
-        
-        let estaVerificado = localStorage.getItem(`verified_${user.uid}`) === 'true';
-        if (!estaVerificado && userDocSnap.exists()) {
-            estaVerificado = userDocSnap.data().emailVerificado === true;
-            if (estaVerificado) localStorage.setItem(`verified_${user.uid}`, 'true');
-        }
+        // Validar si el usuario está verificado por localStorage o si es el admin principal
+        const estaVerificadoLocal = localStorage.getItem(`verified_${user.uid}`) === 'true';
+        const esAdminPrincipal = user.email === "nicolaslmancuso@gmail.com";
 
-        if (!estaVerificado && user.email !== "nicolaslmancuso@gmail.com") {
+        if (!estaVerificadoLocal && !esAdminPrincipal) {
             alert("Tu cuenta aún no ha sido verificada. Por favor hacé clic en el botón del correo que te enviamos para poder ingresar.");
             await signOut(auth);
             window.showLogin();
