@@ -67,7 +67,7 @@ window.cerrarModalNotificacion = function() {
     }
 };
 
-// Control de Permisos por Rol (Editor vs Lector)
+// Control de Permisos por Rol (Editor vs Lector)[cite: 8]
 window.esUsuarioEditor = function() {
     const user = auth.currentUser;
     if (!user) return false;
@@ -192,6 +192,7 @@ window.showApp = function() {
     if (appContent) appContent.classList.remove('hidden');
 };
 
+// Poblar selector de vistas con formato limpio y tag de invitante
 window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     const selector = document.getElementById('selectorVista');
     if (!selector) return;
@@ -199,7 +200,6 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     const user = auth.currentUser;
     if (!user) return;
 
-    // 1. Dejar una opción por defecto inmediata para que NUNCA aparezca vacío al cargar
     const valorGuardadoPrevio = vistaSeleccionadaActual || localStorage.getItem("ultima_vista_id") || "personal";
     
     if (selector.options.length === 0) {
@@ -253,7 +253,6 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
             }
         });
 
-        // 2. Volvemos a construir las opciones limpias con todo ya cargado
         selector.innerHTML = '';
 
         const optPersonal = document.createElement('option');
@@ -279,7 +278,6 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
             }
         }
 
-        // 3. Forzar selección correcta asegurando que exista la opción
         const existeOpcion = Array.from(selector.options).some(opt => opt.value === valorGuardadoPrevio);
         selector.value = existeOpcion ? valorGuardadoPrevio : "personal";
 
@@ -990,6 +988,10 @@ let gastoAEliminarId = null;
 let tipoEliminacionSeleccionado = null;
 
 window.deleteGasto = function(id) {
+    if (!window.esUsuarioEditor()) {
+        window.mostrarNotificacion("Acceso denegado", "Tu cuenta tiene permisos de solo lectura.", "error");
+        return;
+    }
     const gasto = (window.appState.gastos || []).find(g => g.id === id);
     if (!gasto) return;
 
@@ -1051,6 +1053,10 @@ window.volverASeleccionEliminacion = function() {
 };
 
 window.ejecutarEliminacionGasto = function() {
+    if (!window.esUsuarioEditor()) {
+        window.mostrarNotificacion("Acceso denegado", "Tu cuenta tiene permisos de solo lectura.", "error");
+        return;
+    }
     if (!gastoAEliminarId || !tipoEliminacionSeleccionado) return;
 
     const id = gastoAEliminarId;
@@ -1169,6 +1175,10 @@ function renderMiembrosGrupo() {
 
 window.handleInvitarMiembro = async function(e) {
     if (e) e.preventDefault();
+    if (!window.esUsuarioEditor()) {
+        window.mostrarNotificacion("Acceso denegado", "Tu cuenta tiene permisos de solo lectura.", "error");
+        return;
+    }
     const emailInput = document.getElementById('inputInvitarEmail');
     const rolSelect = document.getElementById('selectInvitarRol');
     if (!emailInput) return;
@@ -1222,6 +1232,10 @@ window.handleInvitarMiembro = async function(e) {
 };
 
 window.removerMiembroGrupo = function(uid) {
+    if (!window.esUsuarioEditor()) {
+        window.mostrarNotificacion("Acceso denegado", "Tu cuenta tiene permisos de solo lectura.", "error");
+        return;
+    }
     window.mostrarNotificacion(
         "Quitar integrante",
         "¿Seguro que deseás remover a este integrante del grupo?",
@@ -1258,6 +1272,7 @@ window.removerMiembroGrupo = function(uid) {
 };
 
 window.cancelarInvitacion = function(index) {
+    if (!window.esUsuarioEditor()) return;
     if (window.appState.grupoInfo?.invitacionesPendientes) {
         window.appState.grupoInfo.invitacionesPendientes.splice(index, 1);
         window.saveDataToCloud();
