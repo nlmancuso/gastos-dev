@@ -216,6 +216,7 @@ if (typeof window.deleteGasto === 'function') {
 // PERSISTENCIA DE CAMBIO DE ROL DIRECTA CON SPINNER
 // ==========================================
 
+
 window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
     let loaderDiv = document.getElementById('loader-cambio-rol');
     if (!loaderDiv) {
@@ -229,37 +230,33 @@ window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
     }
 
     try {
-        // 1. Detectar el ID del grupo desde la referencia activa o el selector superior
-        let grupoId = window.docRef?.id || window.currentGrupo;
-        
-        const selector = document.getElementById('selectorVista');
-        if (selector && selector.value && !selector.value.startsWith('personal')) {
-            grupoId = selector.value;
-        }
-
-        // 2. Validar que realmente sea un grupo compartido (que no comience con personal_)
-        if (!grupoId || grupoId.startsWith('personal_')) {
+        const user = auth.currentUser;
+        if (!user) {
             if (loaderDiv) loaderDiv.style.display = 'none';
-            window.mostrarNotificacion(
-                "Atención", 
-                "Estás en 'Mi Espacio Personal'. Para cambiar roles, selecciona tu grupo compartido en el menú desplegable superior de la pantalla principal.", 
-                "info"
-            );
             return;
         }
 
+        // Apuntamos directamente a tu documento personal que es el que estás compartiendo
+        const docIdPersonal = `personal_${user.uid}`;
+
         if (typeof db !== 'undefined') {
+            // Actualizar en memoria local
             if (window.appState?.grupoInfo?.miembros?.[uidMiembro]) {
                 window.appState.grupoInfo.miembros[uidMiembro].rol = nuevoRol;
             }
             
-            await updateDoc(doc(db, "app_data", grupoId), {
+            // Persistir los cambios en Firestore en tu documento personal
+            await updateDoc(doc(db, "app_data", docIdPersonal), {
                 [`appState.grupoInfo.miembros.${uidMiembro}.rol`]: nuevoRol
             });
 
             console.log(`Rol actualizado en Firebase para ${uidMiembro} -> ${nuevoRol}`);
             
-            window.mostrarNotificacion("¡Éxito!", `Rol actualizado a ${nuevoRol.toUpperCase()} correctamente.`, "exito");
+            if (typeof window.showToast === 'function') {
+                window.showToast(`Rol actualizado a ${nuevoRol.toUpperCase()} correctamente`, 'success');
+            } else {
+                window.mostrarNotificacion("¡Éxito!", `Rol actualizado a ${nuevoRol.toUpperCase()} correctamente.`, "exito");
+            }
 
             if (typeof window.renderModalGrupo === 'function') {
                 window.renderModalGrupo();
