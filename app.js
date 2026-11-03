@@ -185,6 +185,9 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     selector.appendChild(optPersonal);
 
     try {
+        // Usamos un Set para asegurarnos de que ningún ID de grupo se repita en el selector
+        const gruposAgregadosIds = new Set();
+
         // 1. Obtener invitaciones aceptadas de este usuario
         const qAceptados = query(
             collection(db, "invitaciones"),
@@ -193,12 +196,12 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
         );
         const snapAceptados = await getDocs(qAceptados);
         
-        const gruposAceptadosIds = new Set();
         snapAceptados.forEach(d => {
-            if (d.data().grupoId) gruposAceptadosIds.add(d.data().grupoId);
+            const gId = d.data().grupoId;
+            if (gId) gruposAgregadosIds.add(gId);
         });
 
-        // 2. Consultar todos los documentos de app_data para evaluar pertenencia real
+        // 2. Consultar todos los documentos de app_data
         const querySnapshot = await getDocs(collection(db, "app_data"));
         
         querySnapshot.forEach((docSnap) => {
@@ -210,18 +213,31 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
             if (grupoInfo) {
                 const miembros = grupoInfo.miembros || {};
                 const esMiembroDirecto = miembros[user.uid] !== undefined;
-                const esMiembroAceptado = gruposAceptadosIds.has(docSnap.id);
+                const esInvitacionAceptada = gruposAgregadosIds.has(docSnap.id);
                 const esAdminCreador = grupoInfo.adminUid === user.uid;
 
-                // Solo agregar si el usuario forma parte activa del grupo
-                if (esMiembroDirecto || esMiembroAceptado || esAdminCreador) {
-                    const optGrupo = document.createElement('option');
-                    optGrupo.value = docSnap.id;
-                    optGrupo.textContent = `👥 ${grupoInfo.nombreGrupo || 'Grupo Control de Gastos'}`;
-                    selector.appendChild(optGrupo);
+                // Si el usuario participa y el grupo todavía no fue agregado al combo
+                if ((esMiembroDirecto || esInvitacionAceptada || esAdminCreador) && !gruposAgregadosIds.has(docSnap.id)) {
+                    gruposAgregadosIds.add(docSnap.id);
                 }
             }
         });
+
+        // 3. Renderizar las opciones únicas en el selector
+        for (const grupoId of gruposAgregadosIds) {
+            const grupoRef = doc(db, "app_data", grupoId);
+            const grupoSnap = await getDoc(grupoRef);
+
+            if (grupoSnap.exists()) {
+                const docData = grupoSnap.data();
+                const grupoInfo = docData.appState?.grupoInfo;
+
+                const optGrupo = document.createElement('option');
+                optGrupo.value = grupoId;
+                optGrupo.textContent = `👥 ${grupoInfo?.nombreGrupo || 'Grupo Control de Gastos'}`;
+                selector.appendChild(optGrupo);
+            }
+        }
     } catch (e) {
         console.error("Error al poblar los grupos en el selector:", e);
     }
