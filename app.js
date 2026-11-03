@@ -115,6 +115,19 @@ window.esUsuarioEditor = function() {
 };
 
 // ==========================================
+// MODAL GENÉRICO DE ADVERTENCIA (REEMPLAZO DE ALERT)
+// ==========================================
+function mostrarMensajeApp(titulo, mensaje) {
+    if (typeof window.mostrarModalAlert === 'function') {
+        window.mostrarModalAlert(titulo, mensaje);
+    } else if (typeof window.mostrarModalConfirmacion === 'function') {
+        window.mostrarModalConfirmacion(titulo, mensaje, null, true); // modo alerta sin botón cancelar
+    } else if (typeof window.showToast === 'function') {
+        window.showToast(mensaje, 'warning');
+    }
+}
+
+// ==========================================
 // APLICACIÓN DE ESTILOS Y RESTRICCIONES VISUALES
 // ==========================================
 
@@ -186,7 +199,7 @@ observer.observe(document.body, { childList: true, subtree: true });
 // ==========================================
 const verificarEscritura = () => {
     if (!window.esUsuarioEditor()) {
-        alert("Modo Lector: No tienes permisos para realizar modificaciones en este grupo.");
+        mostrarMensajeApp("Acceso Restringido", "Modo Lector: No tienes permisos para realizar modificaciones en este grupo.");
         return false;
     }
     return true;
@@ -213,7 +226,6 @@ if (typeof window.deleteGasto === 'function') {
 // PERSISTENCIA DE CAMBIO DE ROL Y MODAL
 // ==========================================
 window.cambiarRolMiembro = function(uidMiembro, nuevoRol) {
-    // Si existe la función de modal por defecto en la app, la invocamos
     if (typeof window.mostrarModalConfirmacion === 'function') {
         window.mostrarModalConfirmacion(
             "Cambiar permisos", 
@@ -221,30 +233,39 @@ window.cambiarRolMiembro = function(uidMiembro, nuevoRol) {
             () => ejecutarCambioRolFirebase(uidMiembro, nuevoRol)
         );
     } else {
-        // Fallback nativo si el modal global no está disponible en el scope
-        if (confirm(`¿Estás seguro de cambiar el rol de este integrante a ${nuevoRol.toUpperCase()}?`)) {
-            ejecutarCambioRolFirebase(uidMiembro, nuevoRol);
-        }
+        ejecutarCambioRolFirebase(uidMiembro, nuevoRol);
     }
 };
 
 async function ejecutarCambioRolFirebase(uidMiembro, nuevoRol) {
     try {
-        const grupoId = window.currentGrupo;
-        if (!grupoId || grupoId.startsWith('personal_')) {
-            alert("No se puede modificar roles en un espacio personal.");
+        // Tomar el ID del grupo desde appState o currentGrupo si no es personal
+        const grupoInfo = window.appState?.grupoInfo;
+        const grupoId = (grupoInfo && grupoInfo.id && !grupoInfo.id.startsWith('personal_')) 
+                        ? grupoInfo.id 
+                        : (window.currentGrupo && !window.currentGrupo.startsWith('personal_') ? window.currentGrupo : null);
+
+        if (!grupoId) {
+            mostrarMensajeApp("Atención", "No se puede modificar roles en un espacio personal.");
             return;
         }
 
         // Actualizar en Firestore la estructura del grupo
         if (typeof db !== 'undefined' && window.appState?.grupoInfo) {
-            window.appState.grupoInfo.miembros[uidMiembro].rol = nuevoRol;
+            if (window.appState.grupoInfo.miembros && window.appState.grupoInfo.miembros[uidMiembro]) {
+                window.appState.grupoInfo.miembros[uidMiembro].rol = nuevoRol;
+            }
             
             await db.collection('grupos').doc(grupoId).update({
                 [`miembros.${uidMiembro}.rol`]: nuevoRol
             });
 
             console.log(`Rol actualizado exitosamente para ${uidMiembro} a ${nuevoRol}`);
+            
+            if (typeof window.showToast === 'function') {
+                window.showToast(`Rol actualizado a ${nuevoRol.toUpperCase()} correctamente`, 'success');
+            }
+
             if (typeof window.renderModalGrupo === 'function') {
                 window.renderModalGrupo();
             } else if (typeof window.renderApp === 'function') {
@@ -253,7 +274,7 @@ async function ejecutarCambioRolFirebase(uidMiembro, nuevoRol) {
         }
     } catch (error) {
         console.error("Error al actualizar el rol en Firebase:", error);
-        alert("Hubo un error al guardar el cambio de rol en la base de datos.");
+        mostrarMensajeApp("Error", "Hubo un problema al guardar el cambio de rol en la base de datos.");
     }
 }
 
