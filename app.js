@@ -186,10 +186,12 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     selector.appendChild(optPersonal);
 
     try {
-        // 2. Buscar únicamente las invitaciones ACEPTADAS por este correo
+        const emailActual = user.email.toLowerCase();
+
+        // 2. Buscar únicamente invitaciones en estado ACEPTADO para este correo
         const qAceptados = query(
             collection(db, "invitaciones"),
-            where("destinatarioEmail", "==", user.email.toLowerCase()),
+            where("destinatarioEmail", "==", emailActual),
             where("estado", "==", "ACEPTADO")
         );
         const snapAceptados = await getDocs(qAceptados);
@@ -200,7 +202,7 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
             if (gId) gruposPermitidosIds.add(gId);
         });
 
-        // 3. Revisar en app_data si el usuario figura explícitamente en el mapa de miembros de algún grupo
+        // 3. Revisar en app_data si el usuario es miembro activo
         const querySnapshot = await getDocs(collection(db, "app_data"));
         
         querySnapshot.forEach((docSnap) => {
@@ -209,16 +211,20 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
             const docData = docSnap.data();
             const grupoInfo = docData.appState?.grupoInfo;
 
-            if (grupoInfo && grupoInfo.miembros) {
-                // Verificar si el UID del usuario logueado está dentro de los miembros
-                const esMiembroRegistrado = grupoInfo.miembros[user.uid] !== undefined;
-                if (esMiembroRegistrado) {
+            if (grupoInfo) {
+                const miembros = grupoInfo.miembros || {};
+                
+                // Verificar si el UID o el Email coinciden en la lista de miembros
+                const esMiembroUID = miembros[user.uid] !== undefined;
+                const esMiembroEmail = Object.values(miembros).some(m => (m.email || "").toLowerCase() === emailActual);
+
+                if (esMiembroUID || esMiembroEmail) {
                     gruposPermitidosIds.add(docSnap.id);
                 }
             }
         });
 
-        // 4. Poblar el combo ÚNICAMENTE con los grupos donde es miembro activo
+        // 4. Cargar sólo las opciones válidas sin duplicados
         for (const grupoId of gruposPermitidosIds) {
             const grupoRef = doc(db, "app_data", grupoId);
             const grupoSnap = await getDoc(grupoRef);
