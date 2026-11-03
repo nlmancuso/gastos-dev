@@ -1164,11 +1164,37 @@ window.removerMiembroGrupo = function(uid) {
         "Quitar integrante",
         "¿Seguro que deseás remover a este integrante del grupo?",
         "error",
-        () => {
-            if (window.appState.grupoInfo && window.appState.grupoInfo.miembros) {
-                delete window.appState.grupoInfo.miembros[uid];
-                window.saveDataToCloud();
-                renderMiembrosGrupo();
+        async () => {
+            try {
+                if (window.appState.grupoInfo && window.appState.grupoInfo.miembros) {
+                    // 1. Identificar el email del usuario que se va a remover
+                    const miembroRemovido = window.appState.grupoInfo.miembros[uid];
+                    const emailRemovido = miembroRemovido ? miembroRemovido.email : null;
+
+                    // 2. Eliminarlo del objeto de miembros local
+                    delete window.appState.grupoInfo.miembros[uid];
+
+                    // 3. Guardar cambios en el documento del grupo en Firestore
+                    await window.saveDataToCloud();
+
+                    // 4. Buscar y actualizar el estado de su invitación a RECHAZADO en Firestore
+                    if (emailRemovido) {
+                        const qInv = query(
+                            collection(db, "invitaciones"),
+                            where("grupoId", "==", window.currentGrupo),
+                            where("destinatarioEmail", "==", emailRemovido.toLowerCase())
+                        );
+                        const snapInv = await getDocs(qInv);
+                        snapInv.forEach(async (invDoc) => {
+                            await updateDoc(doc(db, "invitaciones", invDoc.id), { estado: "RECHAZADO" });
+                        });
+                    }
+
+                    renderMiembrosGrupo();
+                    window.mostrarNotificacion("Integrante removido", "El usuario ya no forma parte del grupo.", "exito");
+                }
+            } catch (e) {
+                console.error("Error al remover miembro:", e);
             }
         }
     );
