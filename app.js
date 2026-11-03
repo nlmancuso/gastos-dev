@@ -280,23 +280,22 @@ window.cerrarSesion = function() {
     signOut(auth);
 };
 
-// Procesar verificación automática desde la URL, guardar respaldo, avisar y recargar
-// A. Verificación instantánea basada en localStorage al abrir el enlace del correo
+// Procesar verificación instantánea al cargar la URL con parámetros
 function verificarDesdeURL() {
     const urlParams = new URLSearchParams(window.location.search);
     const isVerified = urlParams.get('verified') === 'true';
     const uid = urlParams.get('uid');
 
     if (isVerified && uid) {
-        // Guardamos la marca de verificación en el navegador asociada a ese UID
+        // Guardamos de inmediato en localStorage la marca asociada a este UID
         localStorage.setItem(`verified_${uid}`, 'true');
         alert("¡Cuenta verificada con éxito! Ya podés iniciar sesión.");
-        // Limpiamos la URL para dejarla prolija y recargamos
-        window.location.href = window.location.pathname;
+        // Limpiamos la URL y recargamos limpiamente para evitar conflictos de asincronía
+        window.location.replace(window.location.pathname);
     }
 }
 
-// Ejecutar verificación al cargar la página
+// Ejecutar verificación de manera prioritaria al cargar el script
 verificarDesdeURL();
 
 window.cambiarVistaSeleccionada = async function(vistaId) {
@@ -334,12 +333,12 @@ window.cambiarVistaSeleccionada = async function(vistaId) {
     });
 };
 
-// Observador de estado de sesión
+// Observador de estado de sesión blindado con localStorage
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         window.showLoading();
 
-        // Validar si el usuario está verificado por localStorage o si es el admin principal
+        // Validar verificación local o admin principal
         const estaVerificadoLocal = localStorage.getItem(`verified_${user.uid}`) === 'true';
         const esAdminPrincipal = user.email === "nicolaslmancuso@gmail.com";
 
