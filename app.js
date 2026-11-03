@@ -170,6 +170,7 @@ window.showApp = function() {
     if (appContent) appContent.classList.remove('hidden');
 };
 
+// Poblar selector de vistas comprobando la tabla de invitaciones aceptadas
 window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     const selector = document.getElementById('selectorVista');
     if (!selector) return;
@@ -185,6 +186,15 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     selector.appendChild(optPersonal);
 
     try {
+        const qAceptados = query(
+            collection(db, "invitaciones"),
+            where("destinatarioEmail", "==", user.email.toLowerCase()),
+            where("estado", "==", "ACEPTADO")
+        );
+        const snapAceptados = await getDocs(qAceptados);
+        const gruposAceptadosIds = new Set();
+        snapAceptados.forEach(d => gruposAceptadosIds.add(d.data().grupoId));
+
         const querySnapshot = await getDocs(collection(db, "app_data"));
         
         querySnapshot.forEach((docSnap) => {
@@ -195,7 +205,7 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
 
             if (grupoInfo) {
                 const miembros = grupoInfo.miembros || {};
-                const esMiembro = miembros[user.uid] !== undefined;
+                const esMiembro = miembros[user.uid] !== undefined || gruposAceptadosIds.has(docSnap.id);
                 const esAdminCreador = grupoInfo.adminUid === user.uid;
                 const esMaster = user.email === "nicolaslmancuso@gmail.com";
 
@@ -483,19 +493,22 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
+// Escucha invitaciones pendientes Y aceptadas para mostrar historial
 function escucharInvitacionesUsuario(userEmail) {
     if (unsubscribeInvitaciones) unsubscribeInvitaciones();
 
     const q = query(
         collection(db, "invitaciones"), 
-        where("destinatarioEmail", "==", userEmail.toLowerCase()),
-        where("estado", "==", "PENDIENTE")
+        where("destinatarioEmail", "==", userEmail.toLowerCase())
     );
 
     unsubscribeInvitaciones = onSnapshot(q, (snapshot) => {
         const invitaciones = [];
         snapshot.forEach(docSnap => {
-            invitaciones.push({ id: docSnap.id, ...docSnap.data() });
+            const data = docSnap.data();
+            if (data.estado === "PENDIENTE" || data.estado === "ACEPTADO") {
+                invitaciones.push({ id: docSnap.id, ...data });
+            }
         });
         window.renderBandejaNotificaciones(invitaciones);
     });
@@ -506,35 +519,60 @@ window.toggleBandejaNotificaciones = function() {
     if (drop) drop.classList.toggle('hidden');
 };
 
+// Renderizado de bandeja con historial y botón de Salir del grupo
 window.renderBandejaNotificaciones = function(invitaciones) {
     const badge = document.getElementById('badgeNotificaciones');
     const lista = document.getElementById('listaNotificaciones');
     if (!badge || !lista) return;
 
-    if (invitaciones.length > 0) {
-        badge.innerText = invitaciones.length;
-        badge.classList.remove('hidden');
-        lista.innerHTML = '';
+    const pendientes = invitaciones.filter(i => i.estado === "PENDIENTE");
 
-        invitaciones.forEach(inv => {
-            lista.innerHTML += `
-                <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2">
-                    <p class="text-slate-300">
-                        <strong class="text-amber-400">${inv.remitenteEmail}</strong> te invitó a unirte a <strong>${inv.grupoNombre}</strong> (${inv.rol}).
-                    </p>
-                    <div class="flex gap-2 justify-end">
-                        <button onclick="responderInvitacion('${inv.id}', '${inv.grupoId}', '${inv.rol}', 'RECHAZADO')" class="px-2.5 py-1 bg-rose-950/60 hover:bg-rose-900 text-rose-300 rounded-lg font-semibold text-[11px]">
-                            Rechazar
-                        </button>
-                        <button onclick="responderInvitacion('${inv.id}', '${inv.grupoId}', '${inv.rol}', 'ACEPTADO')" class="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-slate-950 rounded-lg font-bold text-[11px]">
-                            Aceptar
-                        </button>
-                    </div>
-                </div>
-            `;
-        });
+    if (pendientes.length > 0) {
+        badge.innerText = pendientes.length;
+        badge.classList.remove('hidden');
     } else {
         badge.classList.add('hidden');
+    }
+
+    if (invitaciones.length > 0) {
+        lista.innerHTML = '';
+        invitaciones.forEach(inv => {
+            if (inv.estado === "PENDIENTE") {
+                lista.innerHTML += `
+                    <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2">
+                        <p class="text-slate-300">
+                            <strong class="text-amber-400">${inv.remitenteEmail}</strong> te invitó a unirte a <strong>${inv.grupoNombre}</strong> (${inv.rol}).
+                        </p>
+                        <div class="flex gap-2 justify-end">
+                            <button onclick="responderInvitacion('${inv.id}', '${inv.grupoId}', '${inv.rol}', 'RECHAZADO')" class="px-2.5 py-1 bg-rose-950/60 hover:bg-rose-900 text-rose-300 rounded-lg font-semibold text-[11px]">
+                                Rechazar
+                            </button>
+                            <button onclick="responderInvitacion('${inv.id}', '${inv.grupoId}', '${inv.rol}', 'ACEPTADO')" class="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-slate-950 rounded-lg font-bold text-[11px]">
+                                Aceptar
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else if (inv.estado === "ACEPTADO") {
+                lista.innerHTML += `
+                    <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800/60 text-xs space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-emerald-400 font-bold text-[10px] uppercase tracking-wider">✓ Pertenece al grupo</span>
+                            <span class="text-slate-500 text-[10px]">${inv.rol}</span>
+                        </div>
+                        <p class="text-slate-300 text-[11px]">
+                            <strong>${inv.grupoNombre}</strong> (Invitado por ${inv.remitenteEmail})
+                        </p>
+                        <div class="flex justify-end">
+                            <button onclick="salirDelGrupoConId('${inv.id}', '${inv.grupoId}')" class="px-2 py-0.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 rounded-lg font-medium text-[10px] transition-colors">
+                                Salir del grupo
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+    } else {
         lista.innerHTML = `<p class="text-xs text-slate-500 text-center py-2">No tenés notificaciones pendientes.</p>`;
     }
 };
@@ -568,12 +606,17 @@ window.responderInvitacion = async function(invitacionId, grupoId, rol, nuevoEst
     }
 };
 
-window.salirDelGrupoActual = async function() {
+window.salirDelGrupoConId = async function(invitacionId, grupoId) {
     if (!confirm("¿Deseás salir de este grupo? Ya no tendrás acceso a sus datos.")) return;
 
     try {
         const user = auth.currentUser;
-        const grupoId = window.currentGrupo;
+        
+        // 1. Marcar invitación como rechazada/salida
+        const invRef = doc(db, "invitaciones", invitacionId);
+        await updateDoc(invRef, { estado: "RECHAZADO" });
+
+        // 2. Quitar del objeto de miembros del grupo
         const grupoRef = doc(db, "app_data", grupoId);
         const grupoSnap = await getDoc(grupoRef);
 
@@ -581,15 +624,19 @@ window.salirDelGrupoActual = async function() {
             const data = grupoSnap.data();
             const miembros = data.appState.grupoInfo?.miembros || {};
             delete miembros[user.uid];
-
             await updateDoc(grupoRef, { "appState.grupoInfo.miembros": miembros });
-            window.mostrarNotificacion("Salida de grupo", "Has salido del grupo correctamente.", "info");
-            await window.poblarSelectorVistas("personal");
-            window.cambiarVistaSeleccionada("personal");
         }
+
+        window.mostrarNotificacion("Salida de grupo", "Has salido del grupo correctamente.", "info");
+        await window.poblarSelectorVistas("personal");
+        window.cambiarVistaSeleccionada("personal");
     } catch (e) {
         console.error("Error al salir del grupo:", e);
     }
+};
+
+window.salirDelGrupoActual = async function() {
+    window.salirDelGrupoConId("", window.currentGrupo);
 };
 
 window.saveDataToCloud = async function() {
