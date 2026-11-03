@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, addDoc, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyDwRTcVpwoHJfTZ-eUr5ileTks5LN-npOE",
@@ -52,7 +52,6 @@ const categoriasHormigaDefault = [
 const dInit = new Date();
 const defaultLocalMonth = `${dInit.getFullYear()}-${String(dInit.getMonth() + 1).padStart(2, '0')}`;
 
-// Estructura limpia garantizada para el Espacio Personal
 const appStateLimpioBase = {
     currentMonth: defaultLocalMonth,
     gastos: [],
@@ -126,7 +125,6 @@ window.showApp = function() {
     if (appContent) appContent.classList.remove('hidden');
 };
 
-// Poblar selector dinámicamente: solo muestra el grupo si el usuario es miembro activo
 window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     const selector = document.getElementById('selectorVista');
     if (!selector) return;
@@ -136,13 +134,11 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
 
     selector.innerHTML = '';
 
-    // 1. Siempre se agrega Mi Espacio Personal
     const optPersonal = document.createElement('option');
     optPersonal.value = "personal";
     optPersonal.textContent = `🏠 Mi Espacio Personal (${user.email.split('@')[0]})`;
     selector.appendChild(optPersonal);
 
-    // 2. Verificar si pertenece al Grupo Compartido
     try {
         const grupoId = "T3E2kcXODg2OLm7i1Roq";
         const grupoRef = doc(db, "app_data", grupoId);
@@ -167,7 +163,6 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     selector.value = vistaSeleccionadaActual || "personal";
 };
 
-// Control de pestañas Login / Registro
 window.mostrarTabAuth = function(tab) {
     const formLogin = document.getElementById('formLogin');
     const formRegister = document.getElementById('formRegister');
@@ -215,7 +210,7 @@ window.handleLogin = async function(e) {
     }
 };
 
-// Registro con Envío de Correo de Verificación vía EmailJS y Control de Errores
+// Registro con Envío de Verificación vía EmailJS (Plantilla Welcome)
 window.handleRegister = async function(e) {
     if (e) e.preventDefault();
     const emailEl = document.getElementById('registerEmail');
@@ -233,26 +228,23 @@ window.handleRegister = async function(e) {
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         const user = userCredential.user;
 
-        // 1. Definir enlace de verificación apuntando al GitHub Pages
-        const linkVerificacion = `https://nlmancuso.github.io/gastos-dev/?uid=${user.uid}`;
+        // 1. Crear enlace de verificación único apuntando a tu app con parámetros de estado
+        const linkVerificacion = `https://nlmancuso.github.io/gastos-dev/?verified=true&uid=${user.uid}`;
 
-        // 2. Enviar correo usando EmailJS con manejo estricto de errores
+        // 2. Enviar mail usando EmailJS con la plantilla correcta (template_j01kfcn)
         try {
             if (typeof emailjs !== 'undefined') {
-                const response = await emailjs.send('service_hib3aln', 'template_xaztoja', {
+                await emailjs.send('service_hib3aln', 'template_j01kfcn', {
                     to_email: email,
                     to_name: email.split('@')[0],
                     link_verificacion: linkVerificacion
                 });
-                console.log('¡EmailJS respondió con éxito!', response.status, response.text);
-            } else {
-                console.error('Error: El objeto emailjs no está definido en el navegador.');
             }
-        } catch (emailError) {
-            console.error('Fallo crítico al intentar enviar por EmailJS:', emailError);
+        } catch (emailErr) {
+            console.error("Error al enviar email mediante EmailJS:", emailErr);
         }
 
-        // 3. Crear su Espacio Personal en Firestore
+        // 3. Crear su Espacio Personal en Firestore con emailVerificado en false
         const personalDocId = `personal_${user.uid}`;
         const personalDocRef = doc(db, "app_data", personalDocId);
 
@@ -260,13 +252,14 @@ window.handleRegister = async function(e) {
 
         await setDoc(personalDocRef, {
             appState: JSON.parse(JSON.stringify(appStateLimpioBase)),
-            creadoEl: new Date().toISOString()
+            creadoEl: new Date().toISOString(),
+            emailVerificado: false
         });
 
-        // 4. Cerrar sesión por seguridad
+        // 4. Desloguear obligatoriamente para que deba validar el correo
         await signOut(auth);
 
-        alert("¡Cuenta creada con éxito! Por favor revisá tu casilla de correo para verificar la cuenta antes de iniciar sesión.");
+        alert("¡Cuenta creada con éxito! Por favor revisá tu casilla de correo y hacé clic en el botón de verificación antes de ingresar.");
         window.showLogin();
     } catch (error) {
         console.error("Error al registrar usuario:", error);
@@ -287,7 +280,6 @@ window.cerrarSesion = function() {
     signOut(auth);
 };
 
-// Cambiar entre Espacio Personal y Grupos con Aislamiento Estricto
 window.cambiarVistaSeleccionada = async function(vistaId) {
     if (!vistaId) return;
     
@@ -323,19 +315,45 @@ window.cambiarVistaSeleccionada = async function(vistaId) {
     });
 };
 
-// Observador de estado de autenticación
+// Observador de Autenticación con Validación Estricta de Verificación
 onAuthStateChanged(auth, async (user) => {
     if (user) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const isVerifiedFromUrl = urlParams.get('verified') === 'true';
+        const userDocRef = doc(db, "app_data", `personal_${user.uid}`);
+
+        // Si el usuario hace clic en el enlace del mail, marcamos su cuenta como verificada en Firestore
+        if (isVerifiedFromUrl) {
+            try {
+                await updateDoc(userDocRef, { emailVerificado: true });
+            } catch (e) {
+                console.log("Actualizando estado verificado...");
+            }
+        }
+
+        // Consultamos el documento del usuario para saber si está verificado
+        const userDocSnap = await getDoc(userDocRef);
+        let estaVerificado = false;
+        if (userDocSnap.exists()) {
+            estaVerificado = userDocSnap.data().emailVerificado === true;
+        }
+
+        // Si no está verificado, le bloqueamos el acceso y lo sacamos
+        if (!estaVerificado) {
+            alert("Tu cuenta aún no ha sido verificada. Por favor hacé clic en el botón del correo que te enviamos para poder ingresar.");
+            await signOut(auth);
+            window.showLogin();
+            return;
+        }
+
         window.showLoading();
         const dLocal = new Date();
         const currentLocalMonthStr = `${dLocal.getFullYear()}-${String(dLocal.getMonth() + 1).padStart(2, '0')}`;
         
         let vistaGuardada = localStorage.getItem("ultima_vista_id") || "personal";
-        
         await window.poblarSelectorVistas(vistaGuardada);
 
         let targetDocId = (vistaGuardada === "personal") ? `personal_${user.uid}` : vistaGuardada;
-
         const docRef = doc(db, "app_data", targetDocId);
         window.docRef = docRef;
         window.currentGrupo = targetDocId;
