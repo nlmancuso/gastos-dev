@@ -183,9 +183,107 @@ window.renderApp = function() {
     setTimeout(aplicarRestriccionesInterfaz, 100);
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(aplicarRestriccionesInterfaz, 500);
+// ==========================================
+// PERSISTENCIA DE CAMBIO DE ROL CON MODAL Y SPINNER
+// ==========================================
+
+// Interceptar clics o cambios en los selectores de rol del modal de grupo
+document.addEventListener('change', function(e) {
+    // Detectar si el select pertenece al cambio de rol de un miembro
+    if (e.target && (e.target.matches('select[onchange*="cambiarRolMiembro"]') || e.target.classList.contains('select-rol-miembro') || e.target.getAttribute('data-uid-miembro'))) {
+        const select = e.target;
+        const uidMiembro = select.getAttribute('data-uid-miembro') || select.dataset.uid;
+        const nuevoRol = select.value;
+
+        // Revertir temporalmente el select visualmente hasta que confirme
+        const rolAnterior = select.getAttribute('data-rol-anterior') || (nuevoRol === 'lector' ? 'editor' : 'lector');
+        
+        if (typeof window.mostrarModalConfirmacion === 'function') {
+            window.mostrarModalConfirmacion(
+                "Cambiar permisos", 
+                `¿Estás seguro de cambiar el rol de este integrante a ${nuevoRol.toUpperCase()}?`, 
+                () => ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, select),
+                () => { select.value = rolAnterior; } // Si cancela, vuelve al valor anterior
+            );
+        } else {
+            ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, select);
+        }
+    }
 });
+
+// Función global por si es llamada directamente por atributo onchange
+window.cambiarRolMiembro = function(uidMiembro, nuevoRol, selectElement) {
+    if (typeof window.mostrarModalConfirmacion === 'function') {
+        window.mostrarModalConfirmacion(
+            "Cambiar permisos", 
+            `¿Estás seguro de cambiar el rol de este integrante a ${nuevoRol.toUpperCase()}?`, 
+            () => ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, selectElement)
+        );
+    } else {
+        ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, selectElement);
+    }
+};
+
+async function ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, selectElement) {
+    // Mostrar indicador de carga visual (spinner / texto)
+    let loaderDiv = document.getElementById('loader-cambio-rol');
+    if (!loaderDiv) {
+        loaderDiv = document.createElement('div');
+        loaderDiv.id = 'loader-cambio-rol';
+        loaderDiv.style.cssText = "position:fixed; top:20px; right:20px; background:#1e293b; color:#fff; padding:12px 20px; border-radius:8px; z-index:99999; box-shadow:0 4px 12px rgba(0,0,0,0.3); display:flex; align-items:center; gap:10px; font-family:sans-serif; font-size:14px;";
+        loaderDiv.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#38bdf8; font-size:16px;"></i> Guardando cambios...`;
+        document.body.appendChild(loaderDiv);
+    } else {
+        loaderDiv.style.display = 'flex';
+    }
+
+    try {
+        const grupoInfo = window.appState?.grupoInfo;
+        const grupoId = (grupoInfo && grupoInfo.id && !grupoInfo.id.startsWith('personal_')) 
+                        ? grupoInfo.id 
+                        : (window.currentGrupo && !window.currentGrupo.startsWith('personal_') ? window.currentGrupo : null);
+
+        if (!grupoId) {
+            if (loaderDiv) loaderDiv.style.display = 'none';
+            if (typeof window.mostrarModalAlert === 'function') {
+                window.mostrarModalAlert("Atención", "No se puede modificar roles en un espacio personal.");
+            }
+            return;
+        }
+
+        // Actualizar en Firestore
+        if (typeof db !== 'undefined') {
+            if (window.appState?.grupoInfo?.miembros?.[uidMiembro]) {
+                window.appState.grupoInfo.miembros[uidMiembro].rol = nuevoRol;
+            }
+            
+            await db.collection('grupos').doc(grupoId).update({
+                [`miembros.${uidMiembro}.rol`]: nuevoRol
+            });
+
+            console.log(`Rol actualizado exitosamente para ${uidMiembro} a ${nuevoRol}`);
+            
+            if (typeof window.showToast === 'function') {
+                window.showToast(`Rol actualizado a ${nuevoRol.toUpperCase()} correctamente`, 'success');
+            }
+
+            if (typeof window.renderModalGrupo === 'function') {
+                window.renderModalGrupo();
+            } else if (typeof window.renderApp === 'function') {
+                window.renderApp();
+            }
+        }
+    } catch (error) {
+        console.error("Error al actualizar el rol en Firebase:", error);
+        if (typeof window.mostrarModalAlert === 'function') {
+            window.mostrarModalAlert("Error", "Hubo un problema al guardar el cambio de rol en la base de datos.");
+        }
+    } finally {
+        if (loaderDiv) {
+            loaderDiv.style.display = 'none';
+        }
+    }
+}
 
 const observer = new MutationObserver(() => {
     if (!window.esUsuarioEditor()) {
