@@ -31,7 +31,6 @@ window.mostrarNotificacion = function(titulo, mensaje, tipo = 'info', callback =
     const elBoton = document.getElementById('modalNotiBoton');
 
     if (!modal) {
-        alert(`${titulo}: ${mensaje}`);
         if (callback) callback();
         return;
     }
@@ -67,15 +66,21 @@ window.cerrarModalNotificacion = function() {
     }
 };
 
-// ==========================================
-// CONTROL DE PERMISOS Y ROLES (LECTOR / EDITOR)
-// ==========================================
+window.mostrarMensajeApp = function(titulo, mensaje, tipo = 'info') {
+    if (typeof window.mostrarNotificacion === 'function') {
+        window.mostrarNotificacion(titulo, mensaje, tipo);
+    } else if (typeof window.mostrarModalAlert === 'function') {
+        window.mostrarModalAlert(titulo, mensaje);
+    } else if (typeof window.showToast === 'function') {
+        window.showToast(mensaje, 'warning');
+    }
+};
 
+// Control de Permisos por Rol Robusto (Editor vs Lector)
 window.esUsuarioEditor = function() {
     const user = auth.currentUser;
     if (!user) return false;
     
-    // Si es el administrador principal
     if (user.email === "nicolaslmancuso@gmail.com") {
         return true;
     }
@@ -89,13 +94,11 @@ window.esUsuarioEditor = function() {
 
     if (!grupoInfo) return false;
 
-    // Si es el adminUid del grupo
     if (grupoInfo.adminUid === user.uid) return true;
 
-    // Buscar al miembro por UID o por Email
     const miembros = grupoInfo.miembros || {};
     const emailActual = user.email.toLowerCase();
-    
+
     let rolMiembro = null;
     if (miembros[user.uid]) {
         rolMiembro = miembros[user.uid].rol;
@@ -106,7 +109,6 @@ window.esUsuarioEditor = function() {
         }
     }
 
-    // Si explícitamente es lector, retorna false
     if (rolMiembro === 'lector') {
         return false;
     }
@@ -114,23 +116,7 @@ window.esUsuarioEditor = function() {
     return rolMiembro !== 'lector';
 };
 
-// ==========================================
-// MODAL GENÉRICO DE ADVERTENCIA (REEMPLAZO DE ALERT)
-// ==========================================
-function mostrarMensajeApp(titulo, mensaje) {
-    if (typeof window.mostrarModalAlert === 'function') {
-        window.mostrarModalAlert(titulo, mensaje);
-    } else if (typeof window.mostrarModalConfirmacion === 'function') {
-        window.mostrarModalConfirmacion(titulo, mensaje, null, true); // modo alerta sin botón cancelar
-    } else if (typeof window.showToast === 'function') {
-        window.showToast(mensaje, 'warning');
-    }
-}
-
-// ==========================================
-// APLICACIÓN DE ESTILOS Y RESTRICCIONES VISUALES
-// ==========================================
-
+// Aplicar estilos y deshabilitaciones dinámicas según el rol
 function aplicarRestriccionesInterfaz() {
     const esEditor = window.esUsuarioEditor();
 
@@ -153,9 +139,10 @@ function aplicarRestriccionesInterfaz() {
             button i.fa-pen, button i.fa-trash-can, button i.fa-trash {
                 display: none !important;
             }
-            /* Deshabilitar selects, inputs, calendarios y elementos de ordenamiento */
+            /* Deshabilitar selects, inputs, calendarios, fechas de vencimiento y ordenamiento */
             select, input, textarea, 
-            [onclick*="sort"], [onclick*="ordenar"], th.cursor-pointer {
+            [onclick*="sort"], [onclick*="ordenar"], th.cursor-pointer,
+            input[type="date"], .fecha-vencimiento {
                 pointer-events: none !important;
                 opacity: 0.9;
                 cursor: default !important;
@@ -165,6 +152,7 @@ function aplicarRestriccionesInterfaz() {
         styleTag.innerHTML = '';
     }
 
+    // Ocultar botones principales por coincidencia de texto
     const botones = document.querySelectorAll('button');
     botones.forEach(btn => {
         const txt = btn.textContent.toLowerCase();
@@ -174,7 +162,7 @@ function aplicarRestriccionesInterfaz() {
     });
 }
 
-// Interceptar renderizado global
+// Interceptar renderizado global para reactivar restricciones
 const originalRenderApp = window.renderApp || function(){};
 window.renderApp = function() {
     if (typeof originalRenderApp === 'function') {
@@ -183,49 +171,66 @@ window.renderApp = function() {
     setTimeout(aplicarRestriccionesInterfaz, 100);
 };
 
-// ==========================================
-// PERSISTENCIA DE CAMBIO DE ROL CON MODAL Y SPINNER
-// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(aplicarRestriccionesInterfaz, 500);
+});
 
-// Interceptar clics o cambios en los selectores de rol del modal de grupo
+const observer = new MutationObserver(() => {
+    if (!window.esUsuarioEditor()) {
+        aplicarRestriccionesInterfaz();
+    }
+});
+observer.observe(document.body, { childList: true, subtree: true });
+
+// Interceptar escrituras en modo lector
+const verificarEscritura = () => {
+    if (!window.esUsuarioEditor()) {
+        window.mostrarMensajeApp("Acceso Restringido", "Modo Lector: No tienes permisos para realizar modificaciones en este grupo.", "error");
+        return false;
+    }
+    return true;
+};
+
+if (typeof window.saveCuenta === 'function') {
+    const orig = window.saveCuenta;
+    window.saveCuenta = function(...args) { if (!verificarEscritura()) return; return orig.apply(this, args); };
+}
+if (typeof window.deleteCuenta === 'function') {
+    const orig = window.deleteCuenta;
+    window.deleteCuenta = function(...args) { if (!verificarEscritura()) return; return orig.apply(this, args); };
+}
+if (typeof window.saveGasto === 'function') {
+    const orig = window.saveGasto;
+    window.saveGasto = function(...args) { if (!verificarEscritura()) return; return orig.apply(this, args); };
+}
+
+// Manejo de cambio de rol de miembro con confirmación y Spinner
 document.addEventListener('change', function(e) {
-    // Detectar si el select pertenece al cambio de rol de un miembro
     if (e.target && (e.target.matches('select[onchange*="cambiarRolMiembro"]') || e.target.classList.contains('select-rol-miembro') || e.target.getAttribute('data-uid-miembro'))) {
         const select = e.target;
         const uidMiembro = select.getAttribute('data-uid-miembro') || select.dataset.uid;
         const nuevoRol = select.value;
-
-        // Revertir temporalmente el select visualmente hasta que confirme
         const rolAnterior = select.getAttribute('data-rol-anterior') || (nuevoRol === 'lector' ? 'editor' : 'lector');
         
-        if (typeof window.mostrarModalConfirmacion === 'function') {
-            window.mostrarModalConfirmacion(
-                "Cambiar permisos", 
-                `¿Estás seguro de cambiar el rol de este integrante a ${nuevoRol.toUpperCase()}?`, 
-                () => ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, select),
-                () => { select.value = rolAnterior; } // Si cancela, vuelve al valor anterior
-            );
-        } else {
-            ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, select);
-        }
+        window.mostrarNotificacion(
+            "Cambiar permisos",
+            `¿Estás seguro de cambiar el rol de este integrante a ${nuevoRol.toUpperCase()}?`,
+            "info",
+            () => ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, select)
+        );
     }
 });
 
-// Función global por si es llamada directamente por atributo onchange
 window.cambiarRolMiembro = function(uidMiembro, nuevoRol, selectElement) {
-    if (typeof window.mostrarModalConfirmacion === 'function') {
-        window.mostrarModalConfirmacion(
-            "Cambiar permisos", 
-            `¿Estás seguro de cambiar el rol de este integrante a ${nuevoRol.toUpperCase()}?`, 
-            () => ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, selectElement)
-        );
-    } else {
-        ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, selectElement);
-    }
+    window.mostrarNotificacion(
+        "Cambiar permisos",
+        `¿Estás seguro de cambiar el rol de este integrante a ${nuevoRol.toUpperCase()}?`,
+        "info",
+        () => ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, selectElement)
+    );
 };
 
 async function ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, selectElement) {
-    // Mostrar indicador de carga visual (spinner / texto)
     let loaderDiv = document.getElementById('loader-cambio-rol');
     if (!loaderDiv) {
         loaderDiv = document.createElement('div');
@@ -245,134 +250,47 @@ async function ejecutarCambioRolFirebaseConSpinner(uidMiembro, nuevoRol, selectE
 
         if (!grupoId) {
             if (loaderDiv) loaderDiv.style.display = 'none';
-            if (typeof window.mostrarModalAlert === 'function') {
-                window.mostrarModalAlert("Atención", "No se puede modificar roles en un espacio personal.");
-            }
+            window.mostrarMensajeApp("Atención", "No se puede modificar roles en un espacio personal.", "error");
             return;
         }
 
-        // Actualizar en Firestore
-        if (typeof db !== 'undefined') {
+        const grupoRef = doc(db, "app_data", grupoId);
+        const grupoSnap = await getDoc(grupoRef);
+
+        if (grupoSnap.exists()) {
+            const data = grupoSnap.data();
+            const appState = data.appState || {};
+            const gInfo = appState.grupoInfo || { miembros: {} };
+            
+            if (gInfo.miembros && gInfo.miembros[uidMiembro]) {
+                gInfo.miembros[uidMiembro].rol = nuevoRol;
+            }
+
             if (window.appState?.grupoInfo?.miembros?.[uidMiembro]) {
                 window.appState.grupoInfo.miembros[uidMiembro].rol = nuevoRol;
             }
-            
-            await db.collection('grupos').doc(grupoId).update({
-                [`miembros.${uidMiembro}.rol`]: nuevoRol
-            });
 
-            console.log(`Rol actualizado exitosamente para ${uidMiembro} a ${nuevoRol}`);
-            
+            await updateDoc(grupoRef, { "appState.grupoInfo": gInfo });
+
             if (typeof window.showToast === 'function') {
                 window.showToast(`Rol actualizado a ${nuevoRol.toUpperCase()} correctamente`, 'success');
+            } else {
+                window.mostrarMensajeApp("¡Éxito!", `El rol fue actualizado a ${nuevoRol.toUpperCase()} correctamente.`, "exito");
             }
 
             if (typeof window.renderModalGrupo === 'function') {
                 window.renderModalGrupo();
-            } else if (typeof window.renderApp === 'function') {
-                window.renderApp();
+            } else if (typeof renderMiembrosGrupo === 'function') {
+                renderMiembrosGrupo();
             }
         }
     } catch (error) {
         console.error("Error al actualizar el rol en Firebase:", error);
-        if (typeof window.mostrarModalAlert === 'function') {
-            window.mostrarModalAlert("Error", "Hubo un problema al guardar el cambio de rol en la base de datos.");
-        }
+        window.mostrarMensajeApp("Error", "Hubo un problema al guardar el cambio de rol en la base de datos.", "error");
     } finally {
         if (loaderDiv) {
             loaderDiv.style.display = 'none';
         }
-    }
-}
-
-const observer = new MutationObserver(() => {
-    if (!window.esUsuarioEditor()) {
-        aplicarRestriccionesInterfaz();
-    }
-});
-observer.observe(document.body, { childList: true, subtree: true });
-
-// ==========================================
-// INTERCEPTAR FUNCIONES DE ESCRITURA
-// ==========================================
-const verificarEscritura = () => {
-    if (!window.esUsuarioEditor()) {
-        mostrarMensajeApp("Acceso Restringido", "Modo Lector: No tienes permisos para realizar modificaciones en este grupo.");
-        return false;
-    }
-    return true;
-};
-
-if (typeof window.saveCuenta === 'function') {
-    const orig = window.saveCuenta;
-    window.saveCuenta = function(...args) { if (!verificarEscritura()) return; return orig.apply(this, args); };
-}
-if (typeof window.deleteCuenta === 'function') {
-    const orig = window.deleteCuenta;
-    window.deleteCuenta = function(...args) { if (!verificarEscritura()) return; return orig.apply(this, args); };
-}
-if (typeof window.saveGasto === 'function') {
-    const orig = window.saveGasto;
-    window.saveGasto = function(...args) { if (!verificarEscritura()) return; return orig.apply(this, args); };
-}
-if (typeof window.deleteGasto === 'function') {
-    const orig = window.deleteGasto;
-    window.deleteGasto = function(...args) { if (!verificarEscritura()) return; return orig.apply(this, args); };
-}
-
-// ==========================================
-// PERSISTENCIA DE CAMBIO DE ROL Y MODAL
-// ==========================================
-window.cambiarRolMiembro = function(uidMiembro, nuevoRol) {
-    if (typeof window.mostrarModalConfirmacion === 'function') {
-        window.mostrarModalConfirmacion(
-            "Cambiar permisos", 
-            `¿Estás seguro de cambiar el rol de este integrante a ${nuevoRol.toUpperCase()}?`, 
-            () => ejecutarCambioRolFirebase(uidMiembro, nuevoRol)
-        );
-    } else {
-        ejecutarCambioRolFirebase(uidMiembro, nuevoRol);
-    }
-};
-
-async function ejecutarCambioRolFirebase(uidMiembro, nuevoRol) {
-    try {
-        // Tomar el ID del grupo desde appState o currentGrupo si no es personal
-        const grupoInfo = window.appState?.grupoInfo;
-        const grupoId = (grupoInfo && grupoInfo.id && !grupoInfo.id.startsWith('personal_')) 
-                        ? grupoInfo.id 
-                        : (window.currentGrupo && !window.currentGrupo.startsWith('personal_') ? window.currentGrupo : null);
-
-        if (!grupoId) {
-            mostrarMensajeApp("Atención", "No se puede modificar roles en un espacio personal.");
-            return;
-        }
-
-        // Actualizar en Firestore la estructura del grupo
-        if (typeof db !== 'undefined' && window.appState?.grupoInfo) {
-            if (window.appState.grupoInfo.miembros && window.appState.grupoInfo.miembros[uidMiembro]) {
-                window.appState.grupoInfo.miembros[uidMiembro].rol = nuevoRol;
-            }
-            
-            await db.collection('grupos').doc(grupoId).update({
-                [`miembros.${uidMiembro}.rol`]: nuevoRol
-            });
-
-            console.log(`Rol actualizado exitosamente para ${uidMiembro} a ${nuevoRol}`);
-            
-            if (typeof window.showToast === 'function') {
-                window.showToast(`Rol actualizado a ${nuevoRol.toUpperCase()} correctamente`, 'success');
-            }
-
-            if (typeof window.renderModalGrupo === 'function') {
-                window.renderModalGrupo();
-            } else if (typeof window.renderApp === 'function') {
-                window.renderApp();
-            }
-        }
-    } catch (error) {
-        console.error("Error al actualizar el rol en Firebase:", error);
-        mostrarMensajeApp("Error", "Hubo un problema al guardar el cambio de rol en la base de datos.");
     }
 }
 
@@ -1428,7 +1346,7 @@ function renderMiembrosGrupo() {
                 </div>
                 ${(esAdmin && !esYoMismo) ? `
                     <div class="flex items-center gap-1.5">
-                        <select onchange="cambiarRolMiembro('${uid}', this.value)" class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-300">
+                        <select onchange="cambiarRolMiembro('${uid}', this.value)" data-uid-miembro="${uid}" class="select-rol-miembro bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-300">
                             <option value="editor" ${info.rol === 'editor' ? 'selected' : ''}>Editor</option>
                             <option value="lector" ${info.rol === 'lector' ? 'selected' : ''}>Lector</option>
                         </select>
