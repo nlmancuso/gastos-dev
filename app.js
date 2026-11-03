@@ -177,18 +177,20 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     const user = auth.currentUser;
     if (!user) return;
 
+    // Guardar la vista seleccionada antes de limpiar
+    const valorSeleccionado = vistaSeleccionadaActual || selector.value || "personal";
     selector.innerHTML = '';
 
-    // 1. Espacio Personal limpio sin el nombre de usuario
+    // 1. Opción Espacio Personal limpia
     const optPersonal = document.createElement('option');
     optPersonal.value = "personal";
-    optPersonal.textContent = `🏠 Mi Espacio Personal`;
+    optPersonal.textContent = "🏠 Mi Espacio Personal";
     selector.appendChild(optPersonal);
 
     try {
         const emailActual = user.email.toLowerCase();
 
-        // 2. Mapear invitaciones ACEPTADAS para extraer el remitente (quien invitó)
+        // 2. Mapear invitaciones ACEPTADAS para identificar a quién pertenece el grupo
         const qAceptados = query(
             collection(db, "invitaciones"),
             where("destinatarioEmail", "==", emailActual),
@@ -196,7 +198,7 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
         );
         const snapAceptados = await getDocs(qAceptados);
         
-        const mapaInvitantes = {}; // { grupoId: "remitenteEmail" }
+        const mapaInvitantes = {};
         snapAceptados.forEach(d => {
             const data = d.data();
             if (data.grupoId) {
@@ -206,7 +208,7 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
 
         const gruposPermitidosIds = new Set(Object.keys(mapaInvitantes));
 
-        // 3. Consultar documentos en app_data para los grupos donde el usuario es miembro directo o creador
+        // 3. Consultar grupos en app_data donde sea miembro
         const querySnapshot = await getDocs(collection(db, "app_data"));
         const mapaCreadores = {};
 
@@ -223,13 +225,37 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
 
                 if (esMiembroUID || esMiembroEmail || gruposPermitidosIds.has(docSnap.id)) {
                     gruposPermitidosIds.add(docSnap.id);
-                    // Guardamos el admin creador como fallback si no proviene de una invitación registrada
                     if (grupoInfo.adminUid && miembros[grupoInfo.adminUid]) {
                         mapaCreadores[docSnap.id] = miembros[grupoInfo.adminUid].email;
                     }
                 }
             }
         });
+
+        // 4. Armar las opciones formateadas con tag de usuario
+        for (const grupoId of gruposPermitidosIds) {
+            const grupoRef = doc(db, "app_data", grupoId);
+            const grupoSnap = await getDoc(grupoRef);
+
+            if (grupoSnap.exists()) {
+                const docData = grupoSnap.data();
+                const grupoInfo = docData.appState?.grupoInfo;
+
+                let hostEmail = mapaInvitantes[grupoId] || mapaCreadores[grupoId] || '';
+                let usuarioTag = hostEmail ? ` (${hostEmail.split('@')[0]})` : '';
+
+                const optGrupo = document.createElement('option');
+                optGrupo.value = grupoId;
+                optGrupo.textContent = `👥 ${grupoInfo?.nombreGrupo || 'Grupo Control de Gastos'}${usuarioTag}`;
+                selector.appendChild(optGrupo);
+            }
+        }
+    } catch (e) {
+        console.error("Error al poblar los grupos en el selector:", e);
+    }
+
+    selector.value = valorSeleccionado;
+};
 
         // 4. Renderizar las opciones agregando entre paréntesis el usuario que invitó o creó el grupo
         for (const grupoId of gruposPermitidosIds) {
