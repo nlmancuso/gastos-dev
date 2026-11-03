@@ -232,6 +232,36 @@ if (typeof window.deleteGasto === 'function') {
 }
 
 // ==========================================
+// DETECCIÓN GLOBAL DE CAMBIO DE ROL EN SELECTORES
+// ==========================================
+
+document.addEventListener('change', function(e) {
+    const target = e.target;
+    // Si el select es el encargado de cambiar el rol (por atributo onchange, clase o estructura del modal de grupo)
+    if (target && target.tagName === 'SELECT' && (
+        target.getAttribute('onchange')?.includes('cambiarRolMiembro') || 
+        target.classList.contains('select-rol') ||
+        target.closest('.modal-grupo-miembros') ||
+        target.outerHTML.includes('cambiarRolMiembro')
+    )) {
+        // Intentar extraer el UID del miembro desde el atributo onchange o dataset
+        const onchangeAttr = target.getAttribute('onchange') || '';
+        let uidMiembro = target.dataset.uid || target.getAttribute('data-uid');
+        
+        if (!uidMiembro && onchangeAttr) {
+            // Extraer primer parámetro entre comillas o sin comillas de cambiarRolMiembro(...)
+            const match = onchangeAttr.match(/cambiarRolMiembro\s*\(\s*['"]?([^'",\s]+)['"]?/);
+            if (match) uidMiembro = match[1];
+        }
+
+        const nuevoRol = target.value;
+        if (uidMiembro && nuevoRol) {
+            window.cambiarRolMiembro(uidMiembro, nuevoRol);
+        }
+    }
+});
+
+// ==========================================
 // PERSISTENCIA DE CAMBIO DE ROL DIRECTA CON SPINNER
 // ==========================================
 
