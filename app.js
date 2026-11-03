@@ -129,7 +129,7 @@ function aplicarRestriccionesInterfaz() {
         document.head.appendChild(styleTag);
     }
 
-    if (!esEditor) {
+if (!esEditor) {
         styleTag.innerHTML = `
             /* Ocultar botones de editar, eliminar, crear en toda la app para lectores */
             button[onclick*="edit"], 
@@ -141,10 +141,12 @@ function aplicarRestriccionesInterfaz() {
             button i.fa-pen, button i.fa-trash-can, button i.fa-trash {
                 display: none !important;
             }
-            /* Deshabilitar selects de estado y otros campos interactivos */
-            select, input, textarea {
+            /* Deshabilitar selects, inputs, calendarios y elementos de ordenamiento */
+            select, input, textarea, 
+            [onclick*="sort"], [onclick*="ordenar"], th.cursor-pointer {
                 pointer-events: none !important;
                 opacity: 0.9;
+                cursor: default !important;
             }
         `;
     } else {
