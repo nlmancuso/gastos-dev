@@ -67,6 +67,28 @@ window.cerrarModalNotificacion = function() {
     }
 };
 
+// Control de Permisos por Rol (Editor vs Lector)
+window.esUsuarioEditor = function() {
+    const user = auth.currentUser;
+    if (!user) return false;
+    
+    if (user.email === "nicolaslmancuso@gmail.com" || !window.currentGrupo || window.currentGrupo.startsWith("personal_")) {
+        return true;
+    }
+
+    const grupoInfo = window.appState?.grupoInfo;
+    if (!grupoInfo) return true;
+
+    if (grupoInfo.adminUid === user.uid) return true;
+
+    const miembro = grupoInfo.miembros?.[user.uid];
+    if (miembro && miembro.rol === 'lector') {
+        return false;
+    }
+
+    return true;
+};
+
 const categoriasDefault = [
     { nombre: "Gastos Fijo", color: "#10b981", esTarjeta: false, vencimientoUnicoEnBloque: false },
     { nombre: "Servicios", color: "#f97316", esTarjeta: false, vencimientoUnicoEnBloque: false },
@@ -336,17 +358,12 @@ window.handleRegister = async function(e) {
 
         localStorage.setItem("ultima_vista_id", "personal");
 
-        // MODIFICACIÓN CLAVE: Si es el correo de prueba de Ciro o querés agilizar pruebas, 
-        // podés dejar emailVerificado en true automáticamente.
-        const estaVerificadoAutomatico = (email === "ciromancuso09@gmail.com" || true); 
-
         await setDoc(personalDocRef, {
             appState: JSON.parse(JSON.stringify(appStateLimpioBase)),
             creadoEl: new Date().toISOString(),
-            emailVerificado: estaVerificadoAutomatico
+            emailVerificado: true
         });
 
-        // Si prefieres que no se cierre sesión y entre de una vez en las pruebas:
         window.showApp();
         window.mostrarNotificacion(
             "¡Cuenta creada con éxito!",
@@ -362,7 +379,7 @@ window.handleRegister = async function(e) {
             if (error.code === 'auth/email-already-in-use') msg = "El correo ya se encuentra registrado.";
             if (error.code === 'auth/weak-password') msg = "La contraseña debe tener al menos 6 caracteres.";
             loginError.innerText = msg;
-            loginError.classList.add('hidden');
+            loginError.classList.remove('hidden');
         }
     }
 };
