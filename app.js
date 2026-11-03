@@ -170,7 +170,6 @@ window.showApp = function() {
     if (appContent) appContent.classList.remove('hidden');
 };
 
-// Poblar selector de vistas comprobando la tabla de invitaciones aceptadas
 window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
     const selector = document.getElementById('selectorVista');
     if (!selector) return;
@@ -203,18 +202,16 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
             const docData = docSnap.data();
             const grupoInfo = docData.appState?.grupoInfo;
 
-            if (grupoInfo) {
-                const miembros = grupoInfo.miembros || {};
-                const esMiembro = miembros[user.uid] !== undefined || gruposAceptadosIds.has(docSnap.id);
-                const esAdminCreador = grupoInfo.adminUid === user.uid;
-                const esMaster = user.email === "nicolaslmancuso@gmail.com";
+            const esMiembroAceptado = gruposAceptadosIds.has(docSnap.id);
+            const esMiembroDirecto = grupoInfo?.miembros && grupoInfo.miembros[user.uid] !== undefined;
+            const esAdminCreador = grupoInfo && grupoInfo.adminUid === user.uid;
+            const esMaster = user.email === "nicolaslmancuso@gmail.com";
 
-                if (esMiembro || esAdminCreador || esMaster) {
-                    const optGrupo = document.createElement('option');
-                    optGrupo.value = docSnap.id;
-                    optGrupo.textContent = `👥 ${grupoInfo.nombreGrupo || 'Grupo Control de Gastos'}`;
-                    selector.appendChild(optGrupo);
-                }
+            if (esMiembroAceptado || esMiembroDirecto || esAdminCreador || esMaster) {
+                const optGrupo = document.createElement('option');
+                optGrupo.value = docSnap.id;
+                optGrupo.textContent = `👥 ${grupoInfo?.nombreGrupo || 'Grupo Control de Gastos'}`;
+                selector.appendChild(optGrupo);
             }
         });
     } catch (e) {
@@ -493,21 +490,23 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// Escucha invitaciones pendientes Y aceptadas para mostrar historial
 function escucharInvitacionesUsuario(userEmail) {
     if (unsubscribeInvitaciones) unsubscribeInvitaciones();
 
-    const q = query(
-        collection(db, "invitaciones"), 
-        where("destinatarioEmail", "==", userEmail.toLowerCase())
-    );
+    const q = query(collection(db, "invitaciones"));
 
     unsubscribeInvitaciones = onSnapshot(q, (snapshot) => {
         const invitaciones = [];
+        const emailActual = userEmail.trim().toLowerCase();
+
         snapshot.forEach(docSnap => {
             const data = docSnap.data();
-            if (data.estado === "PENDIENTE" || data.estado === "ACEPTADO") {
-                invitaciones.push({ id: docSnap.id, ...data });
+            const destino = (data.destinatarioEmail || "").trim().toLowerCase();
+
+            if (destino === emailActual) {
+                if (data.estado === "PENDIENTE" || data.estado === "ACEPTADO") {
+                    invitaciones.push({ id: docSnap.id, ...data });
+                }
             }
         });
         window.renderBandejaNotificaciones(invitaciones);
@@ -519,7 +518,6 @@ window.toggleBandejaNotificaciones = function() {
     if (drop) drop.classList.toggle('hidden');
 };
 
-// Renderizado de bandeja con historial y botón de Salir del grupo
 window.renderBandejaNotificaciones = function(invitaciones) {
     const badge = document.getElementById('badgeNotificaciones');
     const lista = document.getElementById('listaNotificaciones');
@@ -581,6 +579,8 @@ window.responderInvitacion = async function(invitacionId, grupoId, rol, nuevoEst
     try {
         const user = auth.currentUser;
         const invRef = doc(db, "invitaciones", invitacionId);
+
+        // 1. Marcar estado en Firestore
         await updateDoc(invRef, { estado: nuevoEstado });
 
         if (nuevoEstado === 'ACEPTADO') {
@@ -589,15 +589,20 @@ window.responderInvitacion = async function(invitacionId, grupoId, rol, nuevoEst
 
             if (grupoSnap.exists()) {
                 const data = grupoSnap.data();
-                const grupoInfo = data.appState.grupoInfo || { miembros: {} };
+                const appState = data.appState || {};
+                const grupoInfo = appState.grupoInfo || { miembros: {} };
+                
+                if (!grupoInfo.miembros) grupoInfo.miembros = {};
                 grupoInfo.miembros[user.uid] = { email: user.email, rol: rol };
 
                 await updateDoc(grupoRef, { "appState.grupoInfo": grupoInfo });
             }
 
-            window.mostrarNotificacion("¡Unión exitosa!", "Te uniste al grupo con éxito.", "exito");
-            await window.poblarSelectorVistas(grupoId);
-            window.cambiarVistaSeleccionada(grupoId);
+            // 2. Notificación y actualización inmediata del selector
+            window.mostrarNotificacion("¡Unión exitosa!", "Te uniste al grupo con éxito.", "exito", async () => {
+                await window.poblarSelectorVistas(grupoId);
+                window.cambiarVistaSeleccionada(grupoId);
+            });
         } else {
             window.mostrarNotificacion("Invitación rechazada", "Has rechazado la invitación.", "info");
         }
@@ -607,32 +612,36 @@ window.responderInvitacion = async function(invitacionId, grupoId, rol, nuevoEst
 };
 
 window.salirDelGrupoConId = async function(invitacionId, grupoId) {
-    if (!confirm("¿Deseás salir de este grupo? Ya no tendrás acceso a sus datos.")) return;
+    window.mostrarNotificacion(
+        "Confirmar salida",
+        "¿Deseás salir de este grupo? Ya no tendrás acceso a sus datos.",
+        "error",
+        async () => {
+            try {
+                const user = auth.currentUser;
 
-    try {
-        const user = auth.currentUser;
-        
-        // 1. Marcar invitación como rechazada/salida
-        const invRef = doc(db, "invitaciones", invitacionId);
-        await updateDoc(invRef, { estado: "RECHAZADO" });
+                if (invitacionId) {
+                    const invRef = doc(db, "invitaciones", invitacionId);
+                    await updateDoc(invRef, { estado: "RECHAZADO" });
+                }
 
-        // 2. Quitar del objeto de miembros del grupo
-        const grupoRef = doc(db, "app_data", grupoId);
-        const grupoSnap = await getDoc(grupoRef);
+                const grupoRef = doc(db, "app_data", grupoId);
+                const grupoSnap = await getDoc(grupoRef);
 
-        if (grupoSnap.exists()) {
-            const data = grupoSnap.data();
-            const miembros = data.appState.grupoInfo?.miembros || {};
-            delete miembros[user.uid];
-            await updateDoc(grupoRef, { "appState.grupoInfo.miembros": miembros });
+                if (grupoSnap.exists()) {
+                    const data = grupoSnap.data();
+                    const miembros = data.appState.grupoInfo?.miembros || {};
+                    delete miembros[user.uid];
+                    await updateDoc(grupoRef, { "appState.grupoInfo.miembros": miembros });
+                }
+
+                await window.poblarSelectorVistas("personal");
+                window.cambiarVistaSeleccionada("personal");
+            } catch (e) {
+                console.error("Error al salir del grupo:", e);
+            }
         }
-
-        window.mostrarNotificacion("Salida de grupo", "Has salido del grupo correctamente.", "info");
-        await window.poblarSelectorVistas("personal");
-        window.cambiarVistaSeleccionada("personal");
-    } catch (e) {
-        console.error("Error al salir del grupo:", e);
-    }
+    );
 };
 
 window.salirDelGrupoActual = async function() {
@@ -1121,12 +1130,20 @@ window.handleInvitarMiembro = async function(e) {
     }
 };
 
+// Reemplazo del confirm nativo por modal personalizado para remover integrante
 window.removerMiembroGrupo = function(uid) {
-    if (confirm("¿Seguro de remover a este integrante del grupo?")) {
-        delete window.appState.grupoInfo.miembros[uid];
-        window.saveDataToCloud();
-        renderMiembrosGrupo();
-    }
+    window.mostrarNotificacion(
+        "Quitar integrante",
+        "¿Seguro que deseás remover a este integrante del grupo?",
+        "error",
+        () => {
+            if (window.appState.grupoInfo && window.appState.grupoInfo.miembros) {
+                delete window.appState.grupoInfo.miembros[uid];
+                window.saveDataToCloud();
+                renderMiembrosGrupo();
+            }
+        }
+    );
 };
 
 window.cancelarInvitacion = function(index) {
