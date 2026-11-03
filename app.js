@@ -67,11 +67,15 @@ window.cerrarModalNotificacion = function() {
     }
 };
 
-// Control de Permisos por Rol Robusto (Editor vs Lector)
+// ==========================================
+// CONTROL DE PERMISOS Y ROLES (LECTOR / EDITOR)
+// ==========================================
+
 window.esUsuarioEditor = function() {
     const user = auth.currentUser;
     if (!user) return false;
     
+    // Si es el administrador principal
     if (user.email === "nicolaslmancuso@gmail.com") {
         return true;
     }
@@ -85,11 +89,13 @@ window.esUsuarioEditor = function() {
 
     if (!grupoInfo) return false;
 
+    // Si es el adminUid del grupo
     if (grupoInfo.adminUid === user.uid) return true;
 
+    // Buscar al miembro por UID o por Email
     const miembros = grupoInfo.miembros || {};
     const emailActual = user.email.toLowerCase();
-
+    
     let rolMiembro = null;
     if (miembros[user.uid]) {
         rolMiembro = miembros[user.uid].rol;
@@ -100,12 +106,87 @@ window.esUsuarioEditor = function() {
         }
     }
 
+    // Si explícitamente es lector, retorna false
     if (rolMiembro === 'lector') {
         return false;
     }
 
     return rolMiembro !== 'lector';
 };
+
+// ==========================================
+// APLICACIÓN DE INTERFAZ SEGÚN PERMISOS
+// ==========================================
+
+function aplicarRestriccionesInterfaz() {
+    const esEditor = window.esUsuarioEditor();
+
+    // 1. Ocultar el botón principal "+ Nuevo Gasto"
+    const btnNuevoGasto = document.querySelector('button[onclick*="openModalGasto"], button#btnNuevoGasto, .btn-nuevo-gasto');
+    // Búsqueda más genérica por texto si no encuentra el selector exacto
+    const botonesCabecera = document.querySelectorAll('button');
+    botonesCabecera.forEach(btn => {
+        if (btn.textContent.includes('Nuevo Gasto')) {
+            btn.style.display = esEditor ? 'flex' : 'none';
+        }
+    });
+
+    // 2. Ocultar el botón superior de "Nueva Cuenta" en Bancos
+    const botonesCuenta = document.querySelectorAll('button');
+    botonesCuenta.forEach(btn => {
+        if (btn.textContent.includes('Nueva Cuenta') || btn.textContent.includes('Agregar Cuenta')) {
+            btn.style.display = esEditor ? 'flex' : 'none';
+        }
+    });
+}
+
+// Ejecutar cada vez que se actualice la vista o se renderice
+const originalRenderApp = window.renderApp || function(){};
+window.renderApp = function() {
+    if (typeof originalRenderApp === 'function') {
+        originalRenderApp();
+    }
+    aplicarRestriccionesInterfaz();
+};
+
+// También aplicar al cargar la página y al cambiar de grupo
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(aplicarRestriccionesInterfaz, 500);
+});
+
+// Interceptar funciones de modificación si es lector
+const verificarEscritura = () => {
+    if (!window.esUsuarioEditor()) {
+        alert("No tienes permisos de edición en este grupo (Modo Lector).");
+        return false;
+    }
+    return true;
+};
+
+// Envolver funciones críticas de modificación de cuentas/bancos y gastos si existen
+if (typeof window.saveCuenta === 'function') {
+    const originalSaveCuenta = window.saveCuenta;
+    window.saveCuenta = function(...args) {
+        if (!verificarEscritura()) return;
+        return originalSaveCuenta.apply(this, args);
+    };
+}
+
+if (typeof window.deleteCuenta === 'function') {
+    const originalDeleteCuenta = window.deleteCuenta;
+    window.deleteCuenta = function(...args) {
+        if (!verificarEscritura()) return;
+        return originalDeleteCuenta.apply(this, args);
+    };
+}
+
+if (typeof window.saveGasto === 'function') {
+    const originalSaveGasto = window.saveGasto;
+    window.saveGasto = function(...args) {
+        if (!verificarEscritura()) return;
+        return originalSaveGasto.apply(this, args);
+    };
+}
 
 const categoriasDefault = [
     { nombre: "Gastos Fijo", color: "#10b981", esTarjeta: false, vencimientoUnicoEnBloque: false },
