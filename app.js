@@ -137,7 +137,7 @@ const categoriasHormigaDefault = [
 ];
 
 const dInit = new Date();
-const defaultLocalMonth = ${dInit.getFullYear()}-${String(dInit.getMonth() + 1).padStart(2, '0')};
+const defaultLocalMonth = `${dInit.getFullYear()}-${String(dInit.getMonth() + 1).padStart(2, '0')}`;
 
 const appStateLimpioBase = {
 currentMonth: defaultLocalMonth,
