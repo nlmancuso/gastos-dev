@@ -1507,6 +1507,43 @@ window.actualizarEstadoGasto = function(gastoId, monthStr, nuevoEstado) {
     renderApp();
 };
 
+/////FUNCIONES AGREGADAS EL 20261104///////////
+window.actualizarEstadoGastoMasivo = function(gastoId, nuevoEstado) {
+    if (!window.esUsuarioEditor()) {
+        window.mostrarNotificacion("Acceso denegado", "Tu cuenta tiene permisos de solo lectura.", "error");
+        return;
+    }
+
+    const currentMonth = window.appState.currentMonth || defaultLocalMonth;
+    const gasto = (window.appState.gastos || []).find(g => g.id === gastoId);
+    if (!gasto) return;
+
+    const catObj = (window.appState.categorias || categoriasDefault).find(c => c.nombre === gasto.categoria);
+    const esEnBloque = catObj ? catObj.vencimientoUnicoEnBloque : false;
+
+    if (!window.appState.excepcionesEstado) {
+        window.appState.excepcionesEstado = {};
+    }
+
+    if (esEnBloque) {
+        const datosCalculados = window.getCalculatedDataForMonth(currentMonth);
+        datosCalculados.items.forEach(item => {
+            if (item.categoria === gasto.categoria) {
+                const estadoKey = `${item.id}_${currentMonth}`;
+                window.appState.excepcionesEstado[estadoKey] = nuevoEstado;
+            }
+        });
+    } else {
+        const estadoKey = `${gastoId}_${currentMonth}`;
+        window.appState.excepcionesEstado[estadoKey] = nuevoEstado;
+    }
+
+    window.saveDataToCloud();
+    renderApp();
+};
+/////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////
+
 window.verificarLeonelaDirecto = async function() {
     await setDoc(doc(db, "app_data", "personal_Ax3bwHzylYbXjCOGy5Y85e0Iu8R2"), { emailVerificado: true }, { merge: true });
     console.log("¡Cuenta de Leonela verificada con éxito!");
