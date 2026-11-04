@@ -134,18 +134,33 @@ function aplicarRestriccionesInterfaz() {
 
     if (!esEditor) {
         styleTag.innerHTML = `
-            button[onclick*="edit"], 
-            button[onclick*="delete"], 
-            button[onclick*="openModal"],
-            button[onclick*="NuevaCuenta"],
-            button[onclick*="Gasto"],
-            .btn-editar, .btn-eliminar, .btn-nuevo,
-            button i.fa-pen, button i.fa-trash-can, button i.fa-trash {
+            /* Ocultar botones de editar, eliminar, crear en la app principal (excluyendo login) */
+            #appContent button[onclick*="edit"], 
+            #appContent button[onclick*="delete"], 
+            #appContent button[onclick*="openModal"],
+            #appContent button[onclick*="NuevaCuenta"],
+            #appContent button[onclick*="Gasto"],
+            #appContent .btn-editar, #appContent .btn-eliminar, #appContent .btn-nuevo,
+            #appContent button i.fa-pen, #appContent button i.fa-trash-can, #appContent button i.fa-trash {
                 display: none !important;
             }
-            select, input, textarea, 
-            [onclick*="sort"], [onclick*="ordenar"], th.cursor-pointer,
-            input[type="date"], .fecha-vencimiento {
+            /* Deshabilitar selects (excepto selector de vistas), inputs, textareas y BLOQUEAR ORDENAMIENTO Y ARRASTRE DE FILAS */
+            #appContent select:not(#selectorVista), 
+            #appContent input, 
+            #appContent textarea, 
+            #appContent [onclick*="sort"], 
+            #appContent [onclick*="ordenar"], 
+            #appContent th.cursor-pointer,
+            #appContent th[onclick],
+            #appContent thead th,
+            #appContent input[type="date"], 
+            #appContent .fecha-vencimiento,
+            #appContent [draggable],
+            #appContent .drag-handle,
+            #appContent .handle,
+            #appContent tr[draggable],
+            #appContent td:has(i.fa-grip-vertical),
+            #appContent i.fa-grip-vertical {
                 pointer-events: none !important;
                 opacity: 0.9;
                 cursor: default !important;
@@ -155,13 +170,16 @@ function aplicarRestriccionesInterfaz() {
         styleTag.innerHTML = '';
     }
 
-    const botones = document.querySelectorAll('button');
-    botones.forEach(btn => {
-        const txt = btn.textContent.toLowerCase();
-        if (txt.includes('nuevo gasto') || txt.includes('nueva cuenta') || txt.includes('agregar')) {
-            btn.style.display = esEditor ? 'flex' : 'none';
-        }
-    });
+    const appContent = document.getElementById('appContent');
+    if (appContent) {
+        const botones = appContent.querySelectorAll('button');
+        botones.forEach(btn => {
+            const txt = btn.textContent.toLowerCase();
+            if (txt.includes('nuevo gasto') || txt.includes('nueva cuenta') || txt.includes('agregar')) {
+                btn.style.display = esEditor ? 'flex' : 'none';
+            }
+        });
+    }
 }
 
 const originalRenderApp = window.renderApp || function(){};
@@ -1458,5 +1476,97 @@ window.cancelarInvitacion = function(index) {
         window.appState.grupoInfo.invitacionesPendientes.splice(index, 1);
         window.saveDataToCloud();
         renderMiembrosGrupo();
+    }
+};
+
+window.actualizarEstadoGasto = function(gastoId, monthStr, nuevoEstado) {
+    if (!window.appState.excepcionesEstado) window.appState.excepcionesEstado = {};
+    
+    // Encontrar el gasto actual para conocer su categoría
+    const gasto = (window.appState.gastos || []).find(g => g.id === gastoId);
+    if (!gasto) return;
+
+    // Verificar si la categoría es tarjeta o comparte vencimiento único en bloque
+    const catObj = (window.appState.categorias || []).find(c => c.nombre === gasto.categoria);
+    const esEnBloque = catObj ? catObj.vencimientoUnicoEnBloque : false;
+
+    if (esEnBloque) {
+        // Si es tarjeta/bloque, aplicar el estado a TODOS los ítems de esa misma categoría en el mes actual
+        const datosCalculados = window.getCalculatedDataForMonth(monthStr);
+        datosCalculados.items.forEach(item => {
+            if (item.categoria === gasto.categoria) {
+                window.appState.excepcionesEstado[`${item.id}_${monthStr}`] = nuevoEstado;
+            }
+        });
+    } else {
+        // Si es un gasto individual común, afecta solo a su propio ID
+        window.appState.excepcionesEstado[`${gastoId}_${monthStr}`] = nuevoEstado;
+    }
+
+    window.saveDataToCloud(); 
+    renderApp();
+};
+
+window.verificarLeonelaDirecto = async function() {
+    await setDoc(doc(db, "app_data", "personal_Ax3bwHzylYbXjCOGy5Y85e0Iu8R2"), { emailVerificado: true }, { merge: true });
+    console.log("¡Cuenta de Leonela verificada con éxito!");
+    alert("¡Cuenta verificada con éxito! Ya puede iniciar sesión.");
+};
+
+window.limpiarEspacioLeonela = async function() {
+    try {
+        const uidLeonela = "Ax3bwHzylYbXjCOGy5Y85e0Iu8R2";
+        
+        const dInit = new Date();
+        const mesActualStr = `${dInit.getFullYear()}-${String(dInit.getMonth() + 1).padStart(2, '0')}`;
+
+        const appStateLimpioTotal = {
+            currentMonth: mesActualStr,
+            gastos: [],
+            excepcionesMonto: {},
+            excepcionesCategoria: {},
+            excepcionesVencimiento: {},
+            excepcionesVencimientoGrid: {},
+            excepcionesEstado: {},
+            excepcionesEliminacion: {},
+            excepcionesEliminacionSoloMes: {},
+            aumentosIndividuales: {},
+            subcategorias: [
+                { id: "sub_alquiler", nombre: "Alquiler / Expensas", porcentajeAumento: 0 },
+                { id: "sub_servicios_basicos", nombre: "Servicios Básicos (Luz/Gas/Agua)", porcentajeAumento: 0 },
+                { id: "sub_conectividad", nombre: "Internet / Cable / Telefonía", porcentajeAumento: 0 },
+                { id: "sub_suscripciones", nombre: "Streaming y Suscripciones", porcentajeAumento: 0 }
+            ],
+            sueldos: {},
+            cuentasBancarias: [],
+            categorias: [
+                { nombre: "Gastos Fijo", color: "#10b981", esTarjeta: false, vencimientoUnicoEnBloque: false },
+                { nombre: "Servicios", color: "#f97316", esTarjeta: false, vencimientoUnicoEnBloque: false },
+                { nombre: "Santander Visa", color: "#ef4444", esTarjeta: true, vencimientoUnicoEnBloque: true },
+                { nombre: "Ciudad Visa", color: "#3b82f6", esTarjeta: true, vencimientoUnicoEnBloque: true },
+                { nombre: "Mercado Pago", color: "#f59e0b", esTarjeta: true, vencimientoUnicoEnBloque: true },
+                { nombre: "Santander Amex", color: "#f97316", esTarjeta: true, vencimientoUnicoEnBloque: true }
+            ],
+            recurrentesPreferidos: [],
+            sortColumn: 'concepto',
+            sortAscending: true,
+            grupoInfo: {
+                adminUid: uidLeonela,
+                miembros: {
+                    [uidLeonela]: { email: "sosaleonela2024@gmail.com", rol: "admin" }
+                },
+                invitacionesPendientes: []
+            }
+        };
+
+        await setDoc(doc(db, "app_data", `personal_${uidLeonela}`), {
+            appState: appStateLimpioTotal,
+            emailVerificado: true
+        }, { merge: false }); // Reemplazo total para asegurar que no queden datos viejos
+
+        console.log("¡Espacio personal de Leonela limpiado por completo!");
+        alert("Espacio personal de Leonela blanqueado en todos los meses con éxito.");
+    } catch (e) {
+        console.error("Error al limpiar espacio personal:", e);
     }
 };
