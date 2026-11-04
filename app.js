@@ -234,7 +234,6 @@ if (typeof window.deleteGasto === 'function') {
 // PERSISTENCIA DE CAMBIO DE ROL DIRECTA CON SPINNER
 // ==========================================
 
-
 window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
     let loaderDiv = document.getElementById('loader-cambio-rol');
     if (!loaderDiv) {
@@ -254,16 +253,13 @@ window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
             return;
         }
 
-        // Apuntamos directamente a tu documento personal que es el que estás compartiendo
         const docIdPersonal = `personal_${user.uid}`;
 
         if (typeof db !== 'undefined') {
-            // Actualizar en memoria local
             if (window.appState?.grupoInfo?.miembros?.[uidMiembro]) {
                 window.appState.grupoInfo.miembros[uidMiembro].rol = nuevoRol;
             }
             
-            // Persistir los cambios en Firestore en tu documento personal
             await updateDoc(doc(db, "app_data", docIdPersonal), {
                 [`appState.grupoInfo.miembros.${uidMiembro}.rol`]: nuevoRol
             });
@@ -1538,7 +1534,7 @@ window.actualizarEstadoGastoMasivo = function(gastoId, nuevoEstado) {
 };
 
 // ==========================================
-// RENDERIZADO DE PLANILLA AGRUPADA (MODIFICADO)
+// RENDERIZADO DE PLANILLA AGRUPADA (COLUMNAS DINÁMICAS SEGÚN MODO BLOQUE)
 // ==========================================
 
 window.renderPlanillaAgrupadaTabla = function(items) {
@@ -1614,19 +1610,20 @@ window.renderPlanillaAgrupadaTabla = function(items) {
                 let vencimientoCellHtml = '';
                 let estadoCellHtml = '';
 
-                if (esBloque) {
-                    vencimientoCellHtml = `<span class="text-slate-500 italic text-[11px]">En cabecera</span>`;
-                    estadoCellHtml = `<span class="text-slate-500 italic text-[11px]">En cabecera</span>`;
-                } else {
+                if (!esBloque) {
                     vencimientoCellHtml = `
-                        <input type="date" value="${vencimientoVal}" onchange="actualizarVencimientoGrid('${g.id}', '${currentMonth}', this.value, '${categoria}')" class="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs ${vencimientoVal ? 'text-amber-400 font-bold border-amber-800/60 bg-amber-950/60' : 'text-slate-300'} focus:outline-none">
+                        <td class="px-4 py-3">
+                            <input type="date" value="${vencimientoVal}" onchange="actualizarVencimientoGrid('${g.id}', '${currentMonth}', this.value, '${categoria}')" class="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs ${vencimientoVal ? 'text-amber-400 font-bold border-amber-800/60 bg-amber-950/60' : 'text-slate-300'} focus:outline-none">
+                        </td>
                     `;
                     estadoCellHtml = `
-                        <select onchange="actualizarEstadoGasto('${g.id}', '${currentMonth}', this.value)" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-[11px] font-bold ${estadoVal === 'PAGADO' ? 'text-emerald-400' : (estadoVal === 'VENCIDO' ? 'text-rose-400' : 'text-amber-500')} focus:outline-none cursor-pointer">
-                            <option value="PENDIENTE" ${estadoVal === 'PENDIENTE' ? 'selected' : ''}>PENDIENTE</option>
-                            <option value="PAGADO" ${estadoVal === 'PAGADO' ? 'selected' : ''}>PAGADO</option>
-                            <option value="VENCIDO" ${estadoVal === 'VENCIDO' ? 'selected' : ''}>VENCIDO</option>
-                        </select>
+                        <td class="px-4 py-3 text-center">
+                            <select onchange="actualizarEstadoGasto('${g.id}', '${currentMonth}', this.value)" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-[11px] font-bold ${estadoVal === 'PAGADO' ? 'text-emerald-400' : (estadoVal === 'VENCIDO' ? 'text-rose-400' : 'text-amber-500')} focus:outline-none cursor-pointer">
+                                <option value="PENDIENTE" ${estadoVal === 'PENDIENTE' ? 'selected' : ''}>PENDIENTE</option>
+                                <option value="PAGADO" ${estadoVal === 'PAGADO' ? 'selected' : ''}>PAGADO</option>
+                                <option value="VENCIDO" ${estadoVal === 'VENCIDO' ? 'selected' : ''}>VENCIDO</option>
+                            </select>
+                        </td>
                     `;
                 }
 
@@ -1638,10 +1635,10 @@ window.renderPlanillaAgrupadaTabla = function(items) {
                         </td>
                         <td class="px-4 py-3 text-slate-400">${g.tipo}</td>
                         <td class="px-4 py-3 text-slate-300 font-medium">${subcatNombre}</td>
-                        <td class="px-4 py-3">${vencimientoCellHtml}</td>
+                        ${vencimientoCellHtml}
                         <td class="px-4 py-3 font-mono text-amber-300 font-bold">${pctDisplay}</td>
                         <td class="px-4 py-3 text-right font-extrabold text-white">${fmt(g.monto)}</td>
-                        <td class="px-4 py-3 text-center">${estadoCellHtml}</td>
+                        ${estadoCellHtml}
                         <td class="px-4 py-3 text-right">
                             <div class="flex items-center justify-end gap-2">
                                 <button onclick="editGasto('${g.id}')" class="text-slate-400 hover:text-white p-1" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
@@ -1693,10 +1690,10 @@ window.renderPlanillaAgrupadaTabla = function(items) {
                                     <th class="px-4 py-3">CONCEPTO</th>
                                     <th class="px-4 py-3">TIPO / CUOTAS</th>
                                     <th class="px-4 py-3">SUB CATEGORIA</th>
-                                    <th class="px-4 py-3">VENCIMIENTO</th>
+                                    ${!esBloque ? '<th class="px-4 py-3">VENCIMIENTO</th>' : ''}
                                     <th class="px-4 py-3">% INFLACION</th>
                                     <th class="px-4 py-3 text-right">MONTO</th>
-                                    <th class="px-4 py-3 text-center">ESTADO</th>
+                                    ${!esBloque ? '<th class="px-4 py-3 text-center">ESTADO</th>' : ''}
                                     <th class="px-4 py-3 text-right">ACCIONES</th>
                                 </tr>
                             </thead>
