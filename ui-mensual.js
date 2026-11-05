@@ -689,6 +689,7 @@
                 usuarioUid: usuarioActual.uid,
                 usuarioEmail: usuarioActual.email || 'Usuario sin correo'
             };
+            const mesSeleccionado = window.appState.currentMonth;
             const formulario = document.getElementById('formGastoMensual');
             const botonGuardar = formulario.querySelector('button[type="submit"]');
             const textoOriginalBoton = botonGuardar.innerHTML;
@@ -709,6 +710,7 @@
                 botonGuardar.disabled = false;
                 botonGuardar.innerHTML = textoOriginalBoton;
             }
+            window.persistCurrentMonthSelection(mesSeleccionado);
             document.getElementById('gastoMensualConcepto').value = '';
             document.getElementById('gastoMensualMonto').value = '';
             document.getElementById('gastoMensualFecha').value = obtenerFechaLocalParaInput();
@@ -766,4 +768,3 @@
             window.cerrarConfirmacionGastoMensual();
             renderGastoMensualApp();
         };
-
