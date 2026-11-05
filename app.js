@@ -185,6 +185,48 @@ window.renderApp = function() {
     if (typeof originalRenderApp === 'function') {
         originalRenderApp();
     }
+
+    const currentMonth = window.appState.currentMonth || defaultLocalMonth;
+    
+    // Actualizar textos de meses en la cabecera
+    const displayMonth = document.getElementById('displayMonthText');
+    if (displayMonth) displayMonth.innerText = window.formatMonthDisplay(currentMonth);
+
+    const badgeMonth = document.getElementById('badgeMonth');
+    if (badgeMonth) badgeMonth.innerText = window.formatMonthDisplay(currentMonth);
+
+    // Calcular datos del mes actual
+    const datos = window.getCalculatedDataForMonth(currentMonth);
+
+    // Actualizar tarjetas superiores
+    const elSueldo = document.getElementById('cardSueldo');
+    const elFijos = document.getElementById('cardGastosFijos');
+    const elTarjetas = document.getElementById('cardTarjetas');
+    const elTotales = document.getElementById('cardGastosTotales');
+    const elResto = document.getElementById('cardResto');
+
+    const fmt = num => "$ " + num.toLocaleString('es-AR', { minimumFractionDigits: 2 });
+
+    const gastosTotalesMes = datos.totalFijos + datos.totalTarjetas;
+    const restoDisponible = datos.sueldoActual - gastosTotalesMes;
+
+    if (elSueldo) elSueldo.innerText = fmt(datos.sueldoActual);
+    if (elFijos) elFijos.innerText = fmt(datos.totalFijos);
+    if (elTarjetas) elTarjetas.innerText = fmt(datos.totalTarjetas);
+    if (elTotales) elTotales.innerText = fmt(gastosTotalesMes);
+    if (elResto) {
+        elResto.innerText = fmt(restoDisponible);
+        elResto.className = `text-2xl font-extrabold my-1 ${restoDisponible >= 0 ? 'text-green-accent' : 'text-rose-500'}`;
+    }
+
+    // Renderizar la tabla de gastos agrupados y filtros
+    if (typeof window.renderFiltrosPills === 'function') {
+        window.renderFiltrosPills(datos.items);
+    }
+    if (typeof window.renderPlanillaAgrupadaTabla === 'function') {
+        window.renderPlanillaAgrupadaTabla(datos.items);
+    }
+
     setTimeout(aplicarRestriccionesInterfaz, 100);
 };
 
