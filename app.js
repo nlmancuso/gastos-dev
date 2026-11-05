@@ -123,6 +123,48 @@ window.mostrarMensajeApp = function(titulo, mensaje, tipo = 'info') {
 };
 
 window.triggerPageRenders = triggerPageRenders;
+
+window.triggerPageRenders = function() {
+    if (typeof actualizarVisibilidadBotonesAdmin === 'function') {
+        actualizarVisibilidadBotonesAdmin();
+    }
+    
+    if (!window.appState.currentMonth) {
+        window.appState.currentMonth = defaultLocalMonth;
+    }
+
+    const currentMonth = window.appState.currentMonth;
+    const monthHeader = document.getElementById('displayMonthText');
+    if (monthHeader) {
+        monthHeader.innerText = window.formatMonthDisplay ? window.formatMonthDisplay(currentMonth) : currentMonth;
+    }
+
+    if (typeof window.getCalculatedDataForMonth === 'function') {
+        const calculatedData = window.getCalculatedDataForMonth(currentMonth);
+        
+        const elSueldo = document.getElementById('sueldoDisplay');
+        const elTotalFijos = document.getElementById('totalFijosDisplay');
+        const elTotalTarjetas = document.getElementById('totalTarjetasDisplay');
+        const elGastosTotales = document.getElementById('gastosTotalesDisplay');
+        const elResto = document.getElementById('restoDisplay');
+
+        const fmt = num => "$ " + num.toLocaleString('es-AR', { minimumFractionDigits: 2 });
+        const totalGeneral = calculatedData.totalFijos + calculatedData.totalTarjetas;
+        const resto = calculatedData.sueldoActual - totalGeneral;
+
+        if (elSueldo) elSueldo.innerText = fmt(calculatedData.sueldoActual);
+        if (elTotalFijos) elTotalFijos.innerText = fmt(calculatedData.totalFijos);
+        if (elTotalTarjetas) elTotalTarjetas.innerText = fmt(calculatedData.totalTarjetas);
+        if (elGastosTotales) elGastosTotales.innerText = fmt(totalGeneral);
+        if (elResto) elResto.innerText = fmt(resto);
+
+        if (typeof window.renderPlanillaAgrupadaTabla === 'function') {
+            window.renderPlanillaAgrupadaTabla(calculatedData.items);
+        }
+    }
+};
+
+window.renderApp = window.triggerPageRenders;
 // ==========================================
 // CONTROL DE PERMISOS Y ROLES (LECTOR / EDITOR)
 // ==========================================
