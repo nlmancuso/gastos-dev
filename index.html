@@ -454,6 +454,7 @@ select option {
                                 <th onclick="sortGastosMensuales('concepto')" class="px-5 py-3.5 bg-slate-900 cursor-pointer hover:text-white">Descripción</th>
                                 <th onclick="sortGastosMensuales('categoria')" class="px-5 py-3.5 bg-slate-900 cursor-pointer hover:text-white">Categoría</th>
                                 <th class="px-5 py-3.5 bg-slate-900">Medio de pago</th>
+                                <th class="px-5 py-3.5 bg-slate-900">Cargado por</th>
                                 <th onclick="sortGastosMensuales('monto')" class="px-5 py-3.5 text-right bg-slate-900 cursor-pointer hover:text-white">Monto</th>
                                 <th class="px-5 py-3.5 text-right bg-slate-900">Acciones</th>
                             </tr>
@@ -461,6 +462,18 @@ select option {
                         <tbody id="tablaGastoMensualCuerpo" class="divide-y divide-slate-800/60 text-sm font-medium"></tbody>
                     </table>
                 </div>
+            </div>
+
+            <div class="card-bg p-6 rounded-2xl space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-slate-300 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-column text-sky-400"></i> Gasto mensual por usuario (Últimos 6 meses)
+                    </h3>
+                    <button onclick="expandirGraficoModal('chartGastoMensualUsuarios', 'Gasto mensual por usuario')" class="text-slate-400 hover:text-sky-400 p-1.5 bg-slate-900 rounded-lg border border-slate-800 transition" title="Ver en grande">
+                        <i class="fa-solid fa-expand text-xs"></i>
+                    </button>
+                </div>
+                <div class="relative h-72 w-full"><canvas id="chartGastoMensualUsuarios"></canvas></div>
             </div>
         </section>
 
@@ -2104,6 +2117,7 @@ window.ejecutarEliminacionGasto = function() {
         ];
         let ordenGastosMensuales = { columna: 'fecha', ascendente: false };
         let filtroCategoriaGastoMensual = '';
+        let chartGastoMensualUsuarios = null;
 
         function obtenerCategoriasGastoMensual() {
             if (!Array.isArray(window.appState.categoriasGastosMensuales)) {
@@ -2184,8 +2198,6 @@ window.ejecutarEliminacionGasto = function() {
         async function guardarCambiosCategoriasGastoMensual(categorias, gastos) {
             try {
                 await window.guardarCategoriasGastoMensual(categorias, gastos);
-                window.appState.categoriasGastosMensuales = categorias;
-                window.appState.gastosMensuales = gastos;
                 renderListaCategoriasGastoMensual();
                 renderGastoMensualApp();
             } catch (error) {
@@ -2381,13 +2393,14 @@ window.ejecutarEliminacionGasto = function() {
                     if (valorA > valorB) return ordenGastosMensuales.ascendente ? 1 : -1;
                     return 0;
                 });
+            renderGraficoGastoMensualPorUsuario();
 
             const tabla = document.getElementById('tablaGastoMensualCuerpo');
             tabla.replaceChildren();
             if (gastosFiltrados.length === 0) {
                 const fila = document.createElement('tr');
                 const celda = document.createElement('td');
-                celda.colSpan = 6;
+                celda.colSpan = 7;
                 celda.className = 'px-6 py-8 text-center text-slate-500';
                 celda.textContent = 'No hay gastos mensuales que coincidan.';
                 fila.appendChild(celda);
@@ -2410,6 +2423,9 @@ window.ejecutarEliminacionGasto = function() {
                 const medioPago = document.createElement('td');
                 medioPago.className = 'px-5 py-3.5 text-slate-400 text-xs';
                 medioPago.textContent = gasto.medioPago || 'Efectivo';
+                const usuario = document.createElement('td');
+                usuario.className = 'px-5 py-3.5 text-slate-400 text-xs';
+                usuario.textContent = gasto.usuarioEmail || (gasto.usuarioUid ? `Usuario ${gasto.usuarioUid.slice(0, 8)}` : 'Sin identificar');
                 const monto = document.createElement('td');
                 monto.className = 'px-5 py-3.5 text-right font-extrabold text-sky-400';
                 monto.textContent = formatoMoneda(Number(gasto.monto) || 0);
@@ -2425,10 +2441,83 @@ window.ejecutarEliminacionGasto = function() {
                     botonEliminar.addEventListener('click', () => window.deleteGastoMensual(gasto.id));
                     acciones.appendChild(botonEliminar);
                 }
-                fila.append(fecha, concepto, categoria, medioPago, monto, acciones);
+                fila.append(fecha, concepto, categoria, medioPago, usuario, monto, acciones);
                 tabla.appendChild(fila);
             });
         };
+
+        function renderGraficoGastoMensualPorUsuario() {
+            const canvas = document.getElementById('chartGastoMensualUsuarios');
+            if (!canvas || typeof Chart === 'undefined') return;
+
+            const mesActual = window.appState.currentMonth || '2026-10';
+            const [añoActual, numeroMesActual] = mesActual.split('-').map(Number);
+            const meses = [];
+            for (let desplazamiento = 5; desplazamiento >= 0; desplazamiento--) {
+                const fecha = new Date(añoActual, numeroMesActual - 1 - desplazamiento, 1);
+                const clave = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+                meses.push({
+                    clave,
+                    etiqueta: window.formatMonthDisplay(clave)
+                });
+            }
+
+            const gastos = Array.isArray(window.appState.gastosMensuales) ? window.appState.gastosMensuales : [];
+            const totalesPorUsuario = new Map();
+            gastos.forEach(gasto => {
+                if (!gasto.fecha) return;
+                const claveMes = gasto.fecha.slice(0, 7);
+                const mesIndice = meses.findIndex(mes => mes.clave === claveMes);
+                if (mesIndice < 0) return;
+
+                const claveUsuario = gasto.usuarioUid || (gasto.usuarioEmail ? `email:${gasto.usuarioEmail.toLowerCase()}` : 'sin-identificar');
+                const nombreUsuario = gasto.usuarioEmail || (gasto.usuarioUid ? `Usuario ${gasto.usuarioUid.slice(0, 8)}` : 'Sin identificar');
+                if (!totalesPorUsuario.has(claveUsuario)) {
+                    totalesPorUsuario.set(claveUsuario, {
+                        nombre: nombreUsuario,
+                        valores: Array(meses.length).fill(0)
+                    });
+                }
+                totalesPorUsuario.get(claveUsuario).valores[mesIndice] += Number(gasto.monto) || 0;
+            });
+
+            const colores = ['#38bdf8', '#10b981', '#f59e0b', '#a78bfa', '#f43f5e', '#22d3ee', '#84cc16', '#fb923c'];
+            const datasets = [...totalesPorUsuario.values()].map((usuario, indice) => ({
+                label: usuario.nombre,
+                data: usuario.valores,
+                backgroundColor: colores[indice % colores.length],
+                borderRadius: 6
+            }));
+
+            if (chartGastoMensualUsuarios) chartGastoMensualUsuarios.destroy();
+            chartGastoMensualUsuarios = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: meses.map(mes => mes.etiqueta),
+                    datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: datasets.length > 0,
+                            position: 'bottom',
+                            labels: { color: '#cbd5e1' }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: contexto => `${contexto.dataset.label}: $ ${Number(contexto.raw || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { stacked: false, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+                        y: { beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } }
+                    }
+                }
+            });
+        }
 
         window.handleSaveGastoMensual = async function(event) {
             event.preventDefault();
@@ -2437,6 +2526,11 @@ window.ejecutarEliminacionGasto = function() {
                 return;
             }
 
+            const usuarioActual = window.auth?.currentUser;
+            if (!usuarioActual) {
+                window.mostrarMensajeApp('Sesión no disponible', 'Volvé a iniciar sesión para registrar el gasto.', 'error');
+                return;
+            }
             const concepto = document.getElementById('gastoMensualConcepto').value.trim();
             const monto = Number(document.getElementById('gastoMensualMonto').value);
             const fecha = document.getElementById('gastoMensualFecha').value;
@@ -2451,18 +2545,19 @@ window.ejecutarEliminacionGasto = function() {
                 monto,
                 fecha,
                 categoria: document.getElementById('gastoMensualCategoria').value,
-                medioPago: document.getElementById('gastoMensualMedioPago').value
+                medioPago: document.getElementById('gastoMensualMedioPago').value,
+                usuarioUid: usuarioActual.uid,
+                usuarioEmail: usuarioActual.email || 'Usuario sin correo'
             };
             try {
                 await window.agregarGastoMensualCompartido(nuevoGasto);
             } catch (error) {
                 console.error('Error al guardar el gasto mensual compartido:', error);
-                window.mostrarMensajeApp('No se pudo guardar', 'El gasto no se guardó en Firestore. Revisá tu conexión y tus permisos.', 'error');
+                const detalle = error.code === 'permission-denied'
+                    ? 'Firestore rechazó la escritura por permisos. Revisá las reglas del grupo.'
+                    : 'Revisá tu conexión e intentá nuevamente.';
+                window.mostrarMensajeApp('No se pudo guardar', `El gasto no se guardó en Firestore. ${detalle}`, 'error');
                 return;
-            }
-            if (!Array.isArray(window.appState.gastosMensuales)) window.appState.gastosMensuales = [];
-            if (!window.appState.gastosMensuales.some(gasto => gasto.id === nuevoGasto.id)) {
-                window.appState.gastosMensuales.push(nuevoGasto);
             }
             document.getElementById('gastoMensualConcepto').value = '';
             document.getElementById('gastoMensualMonto').value = '';
@@ -2479,13 +2574,15 @@ window.ejecutarEliminacionGasto = function() {
             const gastoAEliminar = (window.appState.gastosMensuales || []).find(gasto => gasto.id === id);
             if (!gastoAEliminar) return;
             try {
-                await window.eliminarGastoMensualCompartido(gastoAEliminar);
+                await window.eliminarGastoMensualCompartido(id);
             } catch (error) {
                 console.error('Error al eliminar el gasto mensual compartido:', error);
-                window.mostrarMensajeApp('No se pudo eliminar', 'El gasto sigue guardado. Revisá tu conexión y tus permisos.', 'error');
+                const detalle = error.code === 'permission-denied'
+                    ? 'Firestore rechazó la escritura por permisos. Revisá las reglas del grupo.'
+                    : 'Revisá tu conexión e intentá nuevamente.';
+                window.mostrarMensajeApp('No se pudo eliminar', `El gasto sigue guardado. ${detalle}`, 'error');
                 return;
             }
-            window.appState.gastosMensuales = (window.appState.gastosMensuales || []).filter(gasto => gasto.id !== id);
             renderGastoMensualApp();
         };
 
