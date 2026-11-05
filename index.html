@@ -895,6 +895,24 @@ select option {
         </div>
     </div>
 
+    <!-- CONFIRMACIÓN DE ELIMINACIÓN DE GASTO HORMIGA -->
+    <div id="modalConfirmarGastoHormiga" class="fixed inset-0 bg-slate-950/80 hidden flex items-center justify-center p-4 z-[60] backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modalConfirmarGastoHormigaTitulo">
+        <div class="card-bg rounded-2xl shadow-2xl max-w-sm w-full p-6 text-white border border-slate-700">
+            <div class="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                <i class="fa-solid fa-trash-can text-lg"></i>
+            </div>
+            <h3 id="modalConfirmarGastoHormigaTitulo" class="text-lg font-bold text-center">Eliminar gasto hormiga</h3>
+            <p class="mt-2 text-sm text-slate-300 text-center">
+                ¿Querés eliminar <strong id="nombreGastoHormigaAEliminar" class="text-white"></strong>?
+            </p>
+            <p id="errorEliminarGastoHormiga" class="hidden mt-4 p-3 bg-rose-950/50 border border-rose-800/60 rounded-xl text-rose-300 text-xs"></p>
+            <div class="flex justify-end gap-2 mt-6">
+                <button id="btnCancelarEliminarGastoHormiga" type="button" onclick="cerrarConfirmacionGastoHormiga()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-700">Cancelar</button>
+                <button id="btnConfirmarEliminarGastoHormiga" type="button" onclick="confirmarEliminacionGastoHormiga()" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs shadow-lg transition">Sí, eliminar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL CATEGORÍAS GASTO MENSUAL -->
     <div id="modalCategoriasGastoMensual" class="fixed inset-0 bg-slate-950/80 hidden flex items-center justify-center p-4 z-50 backdrop-blur-sm">
         <div class="card-bg rounded-2xl shadow-2xl max-w-lg w-full p-6 text-white border border-slate-700 relative flex flex-col">
