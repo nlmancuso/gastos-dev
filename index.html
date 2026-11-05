@@ -490,14 +490,23 @@ select option {
             </div>
 
             <div class="card-bg p-6 rounded-2xl space-y-4">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                     <h3 class="text-sm font-bold text-slate-300 flex items-center gap-2">
                         <i class="fa-solid fa-chart-line text-sky-400"></i> Evolución por Categoría (Últimos 6 Meses)
                     </h3>
-                    <button onclick="expandirGraficoModal('chartGastoMensualEvolucionCategorias', 'Evolución por Categoría')" class="text-slate-400 hover:text-sky-400 p-1.5 bg-slate-900 rounded-lg border border-slate-800 transition" title="Ver en grande">
-                        <i class="fa-solid fa-expand text-xs"></i>
-                    </button>
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-2 text-xs font-semibold">
+                            <span class="text-slate-400">Filtrar:</span>
+                            <button onclick="marcarTodasCategoriasGastoMensual(true)" class="text-sky-400 hover:underline">Todos</button>
+                            <span class="text-slate-600">|</span>
+                            <button onclick="marcarTodasCategoriasGastoMensual(false)" class="text-rose-400 hover:underline">Ninguno</button>
+                        </div>
+                        <button onclick="expandirGraficoModal('chartGastoMensualEvolucionCategorias', 'Evolución por Categoría')" class="text-slate-400 hover:text-sky-400 p-1.5 bg-slate-900 rounded-lg border border-slate-800 transition" title="Ver en grande">
+                            <i class="fa-solid fa-expand text-xs"></i>
+                        </button>
+                    </div>
                 </div>
+                <div class="flex flex-wrap items-center gap-1.5 pt-1" id="containerFiltrosCategoriasGastoMensual"></div>
                 <div class="relative h-72 w-full"><canvas id="chartGastoMensualEvolucionCategorias"></canvas></div>
             </div>
 
@@ -2174,6 +2183,7 @@ window.ejecutarEliminacionGasto = function() {
         ];
         let ordenGastosMensuales = { columna: 'fecha', ascendente: false };
         let filtroCategoriaGastoMensual = '';
+        let filtrosCategoriasGraficoGastoMensual = [];
         let chartGastoMensualCategorias = null;
         let chartGastoMensualEvolucion = null;
         let chartGastoMensualEvolucionCategorias = null;
@@ -2221,6 +2231,72 @@ window.ejecutarEliminacionGasto = function() {
             selectorFiltro.value = opcionesFiltro.includes(filtroSeleccionado) ? filtroSeleccionado : '';
             if (!opcionesFiltro.includes(filtroSeleccionado)) filtroCategoriaGastoMensual = '';
         }
+
+        function obtenerNombresCategoriasGastoMensual() {
+            return [...new Set([
+                ...obtenerCategoriasGastoMensual().map(categoria => categoria.nombre),
+                ...(window.appState.gastosMensuales || []).map(gasto => gasto.categoria).filter(Boolean)
+            ])];
+        }
+
+        function renderFiltrosCategoriasGraficoGastoMensual() {
+            const container = document.getElementById('containerFiltrosCategoriasGastoMensual');
+            if (!container) return;
+            const categorias = obtenerCategoriasGastoMensual();
+            const nombresCategorias = obtenerNombresCategoriasGastoMensual();
+            container.replaceChildren();
+
+            nombresCategorias.forEach((nombre, index) => {
+                const categoria = categorias.find(item => item.nombre === nombre);
+                const color = categoria?.color || ['#10b981', '#8b5cf6', '#3b82f6', '#ef4444', '#06b6d4', '#f59e0b', '#64748b'][index % 7];
+                const seleccionado = filtrosCategoriasGraficoGastoMensual.length === 0
+                    || filtrosCategoriasGraficoGastoMensual.includes(nombre);
+                const etiqueta = document.createElement('label');
+                etiqueta.className = `cursor-pointer px-2.5 py-1 rounded-lg text-xs font-semibold border transition inline-flex items-center gap-1.5 ${seleccionado ? 'bg-slate-800 text-white border-slate-600' : 'bg-slate-900/60 text-slate-500 border-slate-800'}`;
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = nombre;
+                checkbox.checked = seleccionado;
+                checkbox.className = 'hidden';
+                checkbox.addEventListener('change', () => window.toggleFiltroCategoriaGastoMensual(checkbox));
+                const punto = document.createElement('span');
+                punto.className = 'w-2 h-2 rounded-full';
+                punto.style.backgroundColor = color;
+                const texto = document.createElement('span');
+                texto.textContent = nombre;
+                etiqueta.append(checkbox, punto, texto);
+                container.appendChild(etiqueta);
+            });
+        }
+
+        window.toggleFiltroCategoriaGastoMensual = function(checkbox) {
+            const categorias = obtenerNombresCategoriasGastoMensual();
+            if (filtrosCategoriasGraficoGastoMensual.length === 0) {
+                filtrosCategoriasGraficoGastoMensual = [...categorias];
+            } else if (filtrosCategoriasGraficoGastoMensual.includes('__NINGUNA__')) {
+                filtrosCategoriasGraficoGastoMensual = [];
+            }
+
+            if (checkbox.checked) {
+                if (!filtrosCategoriasGraficoGastoMensual.includes(checkbox.value)) {
+                    filtrosCategoriasGraficoGastoMensual.push(checkbox.value);
+                }
+            } else {
+                filtrosCategoriasGraficoGastoMensual = filtrosCategoriasGraficoGastoMensual
+                    .filter(nombre => nombre !== checkbox.value);
+            }
+            if (filtrosCategoriasGraficoGastoMensual.length === categorias.length) {
+                filtrosCategoriasGraficoGastoMensual = [];
+            }
+            renderFiltrosCategoriasGraficoGastoMensual();
+            renderGraficosGastoMensual();
+        };
+
+        window.marcarTodasCategoriasGastoMensual = function(marcar) {
+            filtrosCategoriasGraficoGastoMensual = marcar ? [] : ['__NINGUNA__'];
+            renderFiltrosCategoriasGraficoGastoMensual();
+            renderGraficosGastoMensual();
+        };
 
         function renderListaCategoriasGastoMensual() {
             const container = document.getElementById('listaCategoriasGastoMensual');
@@ -2384,6 +2460,7 @@ window.ejecutarEliminacionGasto = function() {
             if (mensajeLectura) mensajeLectura.classList.toggle('hidden', editor);
             document.getElementById('btnCategoriasGastoMensual').classList.toggle('hidden', !editor);
             renderSelectoresCategoriaGastoMensual();
+            renderFiltrosCategoriasGraficoGastoMensual();
 
             document.getElementById('badgeGastoMensualMes').textContent = mesTexto;
             document.getElementById('badgeGastoMensualCategoriaMes').textContent = mesTexto;
@@ -2602,7 +2679,10 @@ window.ejecutarEliminacionGasto = function() {
             const canvasEvolucionCategorias = document.getElementById('chartGastoMensualEvolucionCategorias');
             if (canvasEvolucionCategorias) {
                 if (chartGastoMensualEvolucionCategorias) chartGastoMensualEvolucionCategorias.destroy();
-                const datasets = nombresCategorias.map(nombre => ({
+                const categoriasVisibles = filtrosCategoriasGraficoGastoMensual.includes('__NINGUNA__')
+                    ? []
+                    : nombresCategorias.filter(nombre => filtrosCategoriasGraficoGastoMensual.length === 0 || filtrosCategoriasGraficoGastoMensual.includes(nombre));
+                const datasets = categoriasVisibles.map(nombre => ({
                     label: nombre,
                     data: meses.map(mes => gastos.reduce((suma, gasto) => (
                         gasto.fecha && gasto.fecha.slice(0, 7) === mes.clave && gasto.categoria === nombre
