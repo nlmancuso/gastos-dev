@@ -1066,42 +1066,7 @@ function actualizarVisibilidadBotonesAdmin() {
     }
 }
 
-function triggerPageRenders() {
-    actualizarVisibilidadBotonesAdmin();
-    
-    // Renderizado principal de la vista activa
-    const currentMonth = window.appState.currentMonth || defaultLocalMonth;
-    const monthHeader = document.getElementById('monthDisplay');
-    if (monthHeader) monthHeader.innerText = window.formatMonthDisplay(currentMonth);
 
-    const calculatedData = window.getCalculatedDataForMonth(currentMonth);
-    
-    // Actualizar Tarjetas Resumen
-    const elSueldo = document.getElementById('sueldoDisplay');
-    const elTotalFijos = document.getElementById('totalFijosDisplay');
-    const elTotalTarjetas = document.getElementById('totalTarjetasDisplay');
-    const elGastosTotales = document.getElementById('gastosTotalesDisplay');
-    const elResto = document.getElementById('restoDisplay');
-
-    const fmt = num => "$ " + num.toLocaleString('es-AR', { minimumFractionDigits: 2 });
-    const totalGeneral = calculatedData.totalFijos + calculatedData.totalTarjetas;
-    const resto = calculatedData.sueldoActual - totalGeneral;
-
-    if (elSueldo) elSueldo.innerText = fmt(calculatedData.sueldoActual);
-    if (elTotalFijos) elTotalFijos.innerText = fmt(calculatedData.totalFijos);
-    if (elTotalTarjetas) elTotalTarjetas.innerText = fmt(calculatedData.totalTarjetas);
-    if (elGastosTotales) elGastosTotales.innerText = fmt(totalGeneral);
-    if (elResto) elResto.innerText = fmt(resto);
-
-    // Renderizar Planilla Agrupada
-    window.renderPlanillaAgrupadaTabla(calculatedData.items);
-
-    if (typeof renderCharts === 'function') renderCharts();
-    if (typeof renderSaldosApp === 'function') renderSaldosApp();
-    if (typeof renderHormigaApp === 'function') renderHormigaApp();
-}
-
-window.renderApp = triggerPageRenders;
 
 window.navigateMonth = function(direction) {
     let [year, month] = (window.appState.currentMonth || defaultLocalMonth).split('-').map(Number);
