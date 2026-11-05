@@ -1076,21 +1076,29 @@ window.navigateMonth = function(direction) {
     triggerPageRenders();
 };
 
+// ==========================================
+// RENDERIZADO PRINCIPAL DE LA APP Y TARJETAS SUPERIORES
+// ==========================================
+
 function triggerPageRenders() {
     actualizarVisibilidadBotonesAdmin();
     
-    // Asegurar que appState.currentMonth tenga un valor válido
     if (!window.appState.currentMonth) {
         window.appState.currentMonth = defaultLocalMonth;
     }
 
     const currentMonth = window.appState.currentMonth;
+    
+    // 1. Actualizar el mes en el selector superior ("Noviembre 2026", etc.)
     const monthHeader = document.getElementById('monthDisplay');
-    if (monthHeader) monthHeader.innerText = window.formatMonthDisplay(currentMonth);
+    if (monthHeader) {
+        monthHeader.innerText = window.formatMonthDisplay(currentMonth);
+    }
 
+    // 2. Calcular los datos económicos del mes activo
     const calculatedData = window.getCalculatedDataForMonth(currentMonth);
     
-    // Actualizar Tarjetas Resumen con los datos reales calculados
+    // 3. Actualizar las tarjetas de resumen superiores
     const elSueldo = document.getElementById('sueldoDisplay');
     const elTotalFijos = document.getElementById('totalFijosDisplay');
     const elTotalTarjetas = document.getElementById('totalTarjetasDisplay');
@@ -1107,13 +1115,28 @@ function triggerPageRenders() {
     if (elGastosTotales) elGastosTotales.innerText = fmt(totalGeneral);
     if (elResto) elResto.innerText = fmt(resto);
 
-    // Renderizar Planilla Agrupada
-    window.renderPlanillaAgrupadaTabla(calculatedData.items);
-
-    if (typeof renderCharts === 'function') renderCharts();
-    if (typeof renderSaldosApp === 'function') renderSaldosApp();
-    if (typeof renderHormigaApp === 'function') renderHormigaApp();
+    // 4. Renderizar la planilla agrupada de abajo
+    if (typeof window.renderPlanillaAgrupadaTabla === 'function') {
+        window.renderPlanillaAgrupadaTabla(calculatedData.items);
+    }
 }
+
+window.renderApp = triggerPageRenders;
+
+window.navigateMonth = function(direction) {
+    let [year, month] = (window.appState.currentMonth || defaultLocalMonth).split('-').map(Number);
+    month += direction;
+    if (month > 12) { month = 1; year++; } 
+    if (month < 1) { month = 12; year--; }
+    window.appState.currentMonth = `${year}-${String(month).padStart(2, '0')}`;
+    triggerPageRenders();
+};
+
+window.formatMonthDisplay = function(ymStr) {
+    if (!ymStr) return '';
+    const [year, month] = ymStr.split('-').map(Number);
+    return `${monthNames[month - 1]} ${year}`;
+};
 
 window.renderApp = triggerPageRenders;
 
