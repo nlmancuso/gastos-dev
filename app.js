@@ -119,7 +119,7 @@ window.esUsuarioEditor = function() {
 };
 
 // ==========================================
-// FUNCIONES DE ACTUALIZACIÓN DE GRILLA (MONTOS Y VENCIMIENTOS)
+// FUNCIONES DE ACTUALIZACIÓN DE MONTO PAGADO
 // ==========================================
 
 window.actualizarMontoPagado = function(gastoId, monthStr, valor) {
