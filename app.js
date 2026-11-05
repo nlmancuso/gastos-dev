@@ -134,6 +134,7 @@ function aplicarRestriccionesInterfaz() {
 
     if (!esEditor) {
         styleTag.innerHTML = `
+            /* Ocultar botones de editar, eliminar, crear en la app principal (excluyendo login) */
             #appContent button[onclick*="edit"], 
             #appContent button[onclick*="delete"], 
             #appContent button[onclick*="openModal"],
@@ -143,6 +144,7 @@ function aplicarRestriccionesInterfaz() {
             #appContent button i.fa-pen, #appContent button i.fa-trash-can, #appContent button i.fa-trash {
                 display: none !important;
             }
+            /* Deshabilitar selects (excepto selector de vistas), inputs, textareas y BLOQUEAR ORDENAMIENTO Y ARRASTRE DE FILAS */
             #appContent select:not(#selectorVista), 
             #appContent input, 
             #appContent textarea, 
@@ -188,7 +190,7 @@ window.renderApp = function() {
 
     const currentMonth = window.appState.currentMonth || defaultLocalMonth;
     
-    // Actualizar textos de meses en la cabecera
+    // Actualizar texto del selector de mes para evitar que quede en "Cargando..."
     const displayMonth = document.getElementById('displayMonthText');
     if (displayMonth) displayMonth.innerText = window.formatMonthDisplay(currentMonth);
 
@@ -198,7 +200,7 @@ window.renderApp = function() {
     // Calcular datos del mes actual
     const datos = window.getCalculatedDataForMonth(currentMonth);
 
-    // Actualizar tarjetas superiores
+    // Actualizar tarjetas de totales superiores
     const elSueldo = document.getElementById('cardSueldo');
     const elFijos = document.getElementById('cardGastosFijos');
     const elTarjetas = document.getElementById('cardTarjetas');
@@ -219,10 +221,7 @@ window.renderApp = function() {
         elResto.className = `text-2xl font-extrabold my-1 ${restoDisponible >= 0 ? 'text-green-accent' : 'text-rose-500'}`;
     }
 
-    // Renderizar la tabla de gastos agrupados y filtros
-    if (typeof window.renderFiltrosPills === 'function') {
-        window.renderFiltrosPills(datos.items);
-    }
+    // Renderizar la tabla de gastos agrupados
     if (typeof window.renderPlanillaAgrupadaTabla === 'function') {
         window.renderPlanillaAgrupadaTabla(datos.items);
     }
@@ -303,6 +302,8 @@ window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
             await updateDoc(doc(db, "app_data", docIdPersonal), {
                 [`appState.grupoInfo.miembros.${uidMiembro}.rol`]: nuevoRol
             });
+
+            console.log(`Rol actualizado en Firebase para ${uidMiembro} -> ${nuevoRol}`);
             
             if (typeof window.showToast === 'function') {
                 window.showToast(`Rol actualizado a ${nuevoRol.toUpperCase()} correctamente`, 'success');
@@ -360,7 +361,7 @@ const appStateLimpioBase = {
     currentMonth: defaultLocalMonth,
     gastos: [],
     excepcionesMonto: {},
-    excepcionesMontoPagado: {},
+    excepcionesMontoPagadoCategoria: {},
     excepcionesCategoria: {},
     excepcionesVencimiento: {},
     excepcionesVencimientoGrid: {},
@@ -466,6 +467,7 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
         });
 
         const gruposPermitidosIds = new Set(Object.keys(mapaInvitantes));
+
         const querySnapshot = await getDocs(collection(db, "app_data"));
         const mapaCreadores = {};
 
@@ -490,6 +492,7 @@ window.poblarSelectorVistas = async function(vistaSeleccionadaActual) {
         });
 
         selector.innerHTML = '';
+
         const optPersonal = document.createElement('option');
         optPersonal.value = "personal";
         optPersonal.textContent = "🏠 Mi Espacio Personal";
@@ -809,6 +812,7 @@ onAuthStateChanged(auth, async (user) => {
 
 function escucharInvitacionesUsuario(userEmail) {
     if (unsubscribeInvitaciones) unsubscribeInvitaciones();
+
     const q = query(collection(db, "invitaciones"));
 
     unsubscribeInvitaciones = onSnapshot(q, (snapshot) => {
@@ -1076,9 +1080,6 @@ window.getPorcentajeAumentoGasto = function(gasto) {
     return 0;
 };
 
-// ==========================================
-// FUNCIÓN CENTRAL CALCULADORA CON ARRASTRE DE SALDOS (PAGO PARCIAL)
-// ==========================================
 window.getCalculatedDataForMonth = function(targetMonth) {
     const sueldoActual = window.getSueldoForMonth(targetMonth);
     let items = [];
@@ -1086,11 +1087,6 @@ window.getCalculatedDataForMonth = function(targetMonth) {
     let totalesPorCat = {};
     (window.appState.categorias || categoriasDefault).forEach(cat => totalesPorCat[cat.nombre] = 0);
     const hoyStr = new Date().toISOString().slice(0, 10);
-
-    let [tY, tM] = targetMonth.split('-').map(Number);
-    let prevM = tM - 1, prevY = tY;
-    if (prevM < 1) { prevM = 12; prevY--; }
-    const prevMonthStr = `${prevY}-${String(prevM).padStart(2, '0')}`;
 
     (window.appState.gastos || []).forEach(gasto => {
         const mesEliminacion = window.appState.excepcionesEliminacion?.[gasto.id];
@@ -1110,18 +1106,18 @@ window.getCalculatedDataForMonth = function(targetMonth) {
             montoAplicar = parseFloat(window.appState.excepcionesMonto[excepcionCatKey]);
             baseMonthStr = targetMonth;
         } else {
-            let [cY, cM] = targetMonth.split('-').map(Number);
+            let [tY, tM] = targetMonth.split('-').map(Number);
             let foundMonto = null;
             let foundMonthStr = null;
 
             for (let i = 0; i < 36; i++) {
-                let checkYM = `${cY}-${String(cM).padStart(2, '0')}`;
+                let checkYM = `${tY}-${String(tM).padStart(2, '0')}`;
                 if (window.appState.excepcionesMonto?.[`${gasto.id}_${checkYM}`] !== undefined) {
                     foundMonto = parseFloat(window.appState.excepcionesMonto[`${gasto.id}_${checkYM}`]);
                     foundMonthStr = checkYM;
                     break;
                 }
-                cM--; if (cM < 1) { cM = 12; cY--; }
+                tM--; if (tM < 1) { tM = 12; tY--; }
             }
             if (foundMonto !== null) {
                 montoAplicar = foundMonto;
@@ -1131,29 +1127,7 @@ window.getCalculatedDataForMonth = function(targetMonth) {
                 baseMonthStr = startYM;
             }
         }
-
-        const prevGridKey = `${gasto.id}_${prevMonthStr}`;
-        const prevMontoOrig = window.appState.excepcionesMonto?.[prevGridKey] !== undefined 
-            ? parseFloat(window.appState.excepcionesMonto[prevGridKey]) 
-            : parseFloat(gasto.monto);
-        const prevMontoPagado = window.appState.excepcionesMontoPagado?.[prevGridKey] !== undefined 
-            ? parseFloat(window.appState.excepcionesMontoPagado[prevGridKey]) 
-            : prevMontoOrig;
-
-        let saldoArrastrado = 0;
-        if (targetMonth > startYM && (prevMontoOrig - prevMontoPagado) > 0) {
-            saldoArrastrado = prevMontoOrig - prevMontoPagado;
-        }
-
-        montoAplicar += saldoArrastrado;
-
-        const gridKey = `${gasto.id}_${targetMonth}`;
-        const montoPagadoActual = window.appState.exceptionsMontoPagado?.[gridKey] !== undefined
-            ? parseFloat(window.appState.exceptionsMontoPagado[gridKey])
-            : (window.appState.excepcionesMontoPagado?.[gridKey] !== undefined 
-                ? parseFloat(window.appState.excepcionesMontoPagado[gridKey]) 
-                : montoAplicar);
-
+        
         const totalCuotas = parseInt(gasto.cuotas) || 1;
         const baseEsFijo = (gasto.categoria || '').toLowerCase().includes('fijo') || (gasto.categoria || '').toLowerCase().includes('servicio');
         const catEsFijo = categoriaAplicar.toLowerCase().includes('fijo') || categoriaAplicar.toLowerCase().includes('servicio');
@@ -1186,14 +1160,16 @@ window.getCalculatedDataForMonth = function(targetMonth) {
                     let vencFinal = gasto.vencimiento || '';
                     for (let step = 0; step < i; step++) vencFinal = window.sumarUnMesAFecha(vencFinal);
                     
+                    const gridKey = `${gasto.id}_${targetMonth}`;
                     const vencimientoAplicar = window.appState.excepcionesVencimientoGrid?.[gridKey] !== undefined
                         ? window.appState.excepcionesVencimientoGrid[gridKey]
                         : (window.appState.excepcionesVencimiento?.[gridKey] !== undefined ? window.appState.excepcionesVencimiento[gridKey] : vencFinal);
 
-                    const estadoGuardado = window.appState.excepcionesEstado?.[gridKey];
+                    const estadoKey = `${gasto.id}_${targetMonth}`;
+                    const estadoGuardado = window.appState.excepcionesEstado?.[estadoKey];
                     let estadoAplicar = estadoGuardado || (vencimientoAplicar && vencimientoAplicar !== 'dd/mm/aaaa' && hoyStr > vencimientoAplicar ? 'VENCIDO' : 'PENDIENTE');
 
-                    generatedItems.push({ id: gasto.id, concepto: gasto.concepto, categoria: categoriaAplicar, tipo: `Cuota ${i + 1}/${totalCuotas}`, monto: montoCuota, montoPagado: montoPagadoActual / totalCuotas, saldoArrastrado: saldoArrastrado / totalCuotas, vencimiento: vencimientoAplicar, estado: estadoAplicar, isRecurrente: false, subcategoriaId: gasto.subcategoriaId });
+                    generatedItems.push({ id: gasto.id, concepto: gasto.concepto, categoria: categoriaAplicar, tipo: `Cuota ${i + 1}/${totalCuotas}`, monto: montoCuota, vencimiento: vencimientoAplicar, estado: estadoAplicar, isRecurrente: false, subcategoriaId: gasto.subcategoriaId });
                 }
             }
         } else if (isRecurrente) {
@@ -1205,57 +1181,43 @@ window.getCalculatedDataForMonth = function(targetMonth) {
                 let vencCalculado = gasto.vencimiento || '';
                 for (let step = 0; step < diffMeses; step++) vencCalculado = window.sumarUnMesAFecha(vencCalculado);
 
+                const gridKey = `${gasto.id}_${targetMonth}`;
                 let vencimientoAplicar = window.appState.excepcionesVencimientoGrid?.[gridKey] !== undefined 
                     ? window.appState.excepcionesVencimientoGrid[gridKey] 
-                    : (window.appState.excepcionesVencimiento?.[gridKey] !== undefined 
-                        ? window.appState.excepcionesVencimiento[gridKey] 
+                    : (window.appState.excepcionesVencimiento?.[`${gasto.id}_${targetMonth}`] !== undefined 
+                        ? window.appState.excepcionesVencimiento[`${gasto.id}_${targetMonth}`] 
                         : vencCalculado);
 
-                const estadoGuardado = window.appState.excepcionesEstado?.[gridKey];
+                const estadoKey = `${gasto.id}_${targetMonth}`;
+                const estadoGuardado = window.appState.excepcionesEstado?.[estadoKey];
                 let estadoAplicar = estadoGuardado || (vencimientoAplicar && vencimientoAplicar !== 'dd/mm/aaaa' && hoyStr > vencimientoAplicar ? 'VENCIDO' : 'PENDIENTE');
 
                 const tipoStr = (baseEsFijo || catEsFijo) ? 'Recurrente' : 'Débito Automático';
-                generatedItems.push({ id: gasto.id, concepto: gasto.concepto, categoria: categoriaAplicar, tipo: tipoStr, monto: montoAplicar, montoPagado: montoPagadoActual, saldoArrastrado, vencimiento: vencimientoAplicar, estado: estadoAplicar, isRecurrente: true, subcategoriaId: gasto.subcategoriaId });
+                generatedItems.push({ id: gasto.id, concepto: gasto.concepto, categoria: categoriaAplicar, tipo: tipoStr, monto: montoAplicar, vencimiento: vencimientoAplicar, estado: estadoAplicar, isRecurrente: true, subcategoriaId: gasto.subcategoriaId });
             }
         } else {
             if (targetMonth === startYM) {
+                const gridKey = `${gasto.id}_${targetMonth}`;
                 const vencimientoAplicar = window.appState.excepcionesVencimientoGrid?.[gridKey] !== undefined ? window.appState.excepcionesVencimientoGrid[gridKey] : (window.appState.excepcionesVencimiento?.[gridKey] !== undefined ? window.appState.excepcionesVencimiento[gridKey] : (gasto.vencimiento ?? ''));
 
-                const estadoGuardado = window.appState.excepcionesEstado?.[gridKey];
+                const estadoKey = `${gasto.id}_${targetMonth}`;
+                const estadoGuardado = window.appState.excepcionesEstado?.[estadoKey];
                 let estadoAplicar = estadoGuardado || (vencimientoAplicar && vencimientoAplicar !== 'dd/mm/aaaa' && hoyStr > vencimientoAplicar ? 'VENCIDO' : 'PENDIENTE');
 
-                generatedItems.push({ id: gasto.id, concepto: gasto.concepto, categoria: categoriaAplicar, tipo: 'Débito', monto: montoAplicar, montoPagado: montoPagadoActual, saldoArrastrado, vencimiento: vencimientoAplicar, estado: estadoAplicar, isRecurrente: false, subcategoriaId: gasto.subcategoriaId });
+                generatedItems.push({ id: gasto.id, concepto: gasto.concepto, categoria: categoriaAplicar, tipo: 'Débito', monto: montoAplicar, vencimiento: vencimientoAplicar, estado: estadoAplicar, isRecurrente: false, subcategoriaId: gasto.subcategoriaId });
             }
         }
 
         generatedItems.forEach(gi => {
             const catObj = (window.appState.categorias || categoriasDefault).find(c => c.nombre === gi.categoria);
             const esTarjetaCat = catObj ? catObj.esTarjeta : true;
-            if (!esTarjetaCat) totalFijos += gi.montoPagado;
-            else totalTarjetas += gi.montoPagado;
-            if (totalesPorCat[gi.categoria] !== undefined) totalesPorCat[gi.categoria] += gi.montoPagado;
+            if (!esTarjetaCat) totalFijos += gi.monto;
+            else totalTarjetas += gi.monto;
+            if (totalesPorCat[gi.categoria] !== undefined) totalesPorCat[gi.categoria] += gi.monto;
             items.push(gi);
         });
     });
     return { sueldoActual, items, totalFijos, totalTarjetas, totalesPorCat };
-};
-
-window.actualizarMontoPagado = function(gastoId, monthStr, nuevoMontoPagado) {
-    if (!window.esUsuarioEditor()) {
-        window.mostrarNotificacion("Acceso denegado", "Tu cuenta tiene permisos de solo lectura.", "error");
-        return;
-    }
-
-    if (!window.appState.excepcionesMontoPagado) {
-        window.appState.excepcionesMontoPagado = {};
-    }
-
-    const valNum = parseFloat(nuevoMontoPagado) || 0;
-    const gridKey = `${gastoId}_${monthStr}`;
-    window.appState.excepcionesMontoPagado[gridKey] = valNum;
-
-    window.saveDataToCloud();
-    renderApp();
 };
 
 let gastoAEliminarId = null;
@@ -1375,6 +1337,7 @@ function renderMiembrosGrupo() {
     if (!container) return;
 
     container.innerHTML = '';
+    
     const userEmail = auth.currentUser ? auth.currentUser.email : 'usuario@ejemplo.com';
     const userUid = auth.currentUser ? auth.currentUser.uid : 'uid_actual';
 
@@ -1608,4 +1571,276 @@ window.actualizarEstadoGastoMasivo = function(gastoId, nuevoEstado) {
 
     window.saveDataToCloud();
     renderApp();
+};
+
+window.actualizarMontoPagadoCategoria = function(categoriaNombre, monthStr, nuevoMonto) {
+    if (!window.esUsuarioEditor()) {
+        window.mostrarNotificacion("Acceso denegado", "Tu cuenta tiene permisos de solo lectura.", "error");
+        return;
+    }
+
+    if (!window.appState.excepcionesMontoPagadoCategoria) {
+        window.appState.excepcionesMontoPagadoCategoria = {};
+    }
+
+    const valNum = parseFloat(nuevoMonto) || 0;
+    const key = `${categoriaNombre}_${monthStr}`;
+    window.appState.excepcionesMontoPagadoCategoria[key] = valNum;
+
+    window.saveDataToCloud();
+    renderApp();
+};
+
+// ==========================================
+// RENDERIZADO DE PLANILLA AGRUPADA (COLUMNAS DINÁMICAS SEGÚN MODO BLOQUE)
+// ==========================================
+
+window.renderPlanillaAgrupadaTabla = function(items) {
+    const container = document.getElementById('containerPlanillaAgrupada');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const filtrosActivos = window.filtrosTemporales || [];
+    let itemsFiltrados = items.filter(item => filtrosActivos.length === 0 || filtrosActivos.includes(item.categoria));
+
+    if (itemsFiltrados.length === 0) {
+        container.innerHTML = '<p class="text-xs text-slate-500 italic text-center py-8">No hay gastos que coincidan con los filtros seleccionados.</p>';
+        return;
+    }
+
+    let grupos = {};
+    itemsFiltrados.forEach(item => {
+        if (!grupos[item.categoria]) grupos[item.categoria] = [];
+        grupos[item.categoria].push(item);
+    });
+
+    const ordenGuardado = window.appState.ordenItemsCategoria || {};
+    Object.keys(grupos).forEach(cat => {
+        if (ordenGuardado[cat]) {
+            const idsOrden = ordenGuardado[cat];
+            grupos[cat].sort((a, b) => {
+                let idxA = idsOrden.indexOf(a.id);
+                let idxB = idsOrden.indexOf(b.id);
+                if (idxA === -1) idxA = 999;
+                if (idxB === -1) idxB = 999;
+                return idxA - idxB;
+            });
+        }
+    });
+
+    const catList = window.appState.categorias || categoriasDefault;
+    const currentMonth = window.appState.currentMonth || defaultLocalMonth;
+    const fmt = num => "$ " + num.toLocaleString('es-AR', { minimumFractionDigits: 2 });
+
+    Object.entries(grupos).forEach(([categoria, gastosCat]) => {
+        const catObj = catList.find(c => c.nombre === categoria);
+        const colorCat = catObj ? catObj.color : '#64748b';
+        const totalCat = gastosCat.reduce((acc, g) => acc + g.monto, 0);
+
+        const categoriaPagadoKey = `${categoria}_${currentMonth}`;
+        const montoPagadoCatActual = window.appState.excepcionesMontoPagadoCategoria?.[categoriaPagadoKey] !== undefined
+            ? parseFloat(window.appState.excepcionesMontoPagadoCategoria[categoriaPagadoKey])
+            : totalCat;
+
+        const isAbierto = window.categoriasAbiertasMap[categoria] === true;
+        const esBloque = catObj ? catObj.vencimientoUnicoEnBloque : false;
+
+        let vencimientoGrupo = '';
+        gastosCat.forEach(g => { if (g.vencimiento && !vencimientoGrupo) vencimientoGrupo = g.vencimiento; });
+        const gridKeyFirst = `${gastosCat[0]?.id}_${currentMonth}`;
+        const vencimientoValFirst = window.appState.excepcionesVencimientoGrid?.[gridKeyFirst] !== undefined ? window.appState.excepcionesVencimientoGrid[gridKeyFirst] : vencimientoGrupo;
+        
+        const estadoValFirst = gastosCat[0]?.estado || 'PENDIENTE';
+
+        let rowsHtml = '';
+        if (isAbierto) {
+            rowsHtml = gastosCat.map(g => {
+                const gridKey = `${g.id}_${currentMonth}`;
+                const vencimientoVal = window.appState.excepcionesVencimientoGrid?.[gridKey] !== undefined ? window.appState.excepcionesVencimientoGrid[gridKey] : (g.vencimiento || '');
+                const estadoVal = g.estado || 'PENDIENTE';
+
+                const subcatIdActual = window.appState.excepcionesSubcategoria?.[gridKey] !== undefined ? window.appState.excepcionesSubcategoria[gridKey] : g.subcategoriaId;
+                const subcatObj = (window.appState.subcategorias || []).find(s => s.id === subcatIdActual);
+                const subcatNombre = subcatObj ? subcatObj.nombre : '-';
+
+                const pctIndiv = window.appState.aumentosIndividuales?.[g.id];
+                let pctDisplay = '-';
+                if (pctIndiv !== undefined && pctIndiv !== '') {
+                    pctDisplay = `${pctIndiv}% <span class="text-[10px] text-amber-400" title="Individual">(Ind)</span>`;
+                } else if (subcatObj && subcatObj.porcentajeAumento) {
+                    pctDisplay = `${subcatObj.porcentajeAumento}% <span class="text-[10px] text-slate-500" title="Subcategoría">(Sub)</span>`;
+                }
+
+                let vencimientoCellHtml = '';
+                let estadoCellHtml = '';
+
+                if (!esBloque) {
+                    vencimientoCellHtml = `
+                        <td class="px-4 py-3">
+                            <input type="date" value="${vencimientoVal}" onchange="actualizarVencimientoGrid('${g.id}', '${currentMonth}', this.value, '${categoria}')" class="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs ${vencimientoVal ? 'text-amber-400 font-bold border-amber-800/60 bg-amber-950/60' : 'text-slate-300'} focus:outline-none">
+                        </td>
+                    `;
+                    estadoCellHtml = `
+                        <td class="px-4 py-3 text-center">
+                            <select onchange="actualizarEstadoGasto('${g.id}', '${currentMonth}', this.value)" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-[11px] font-bold ${estadoVal === 'PAGADO' ? 'text-emerald-400' : (estadoVal === 'VENCIDO' ? 'text-rose-400' : 'text-amber-500')} focus:outline-none cursor-pointer">
+                                <option value="PENDIENTE" ${estadoVal === 'PENDIENTE' ? 'selected' : ''}>PENDIENTE</option>
+                                <option value="PAGADO" ${estadoVal === 'PAGADO' ? 'selected' : ''}>PAGADO</option>
+                                <option value="VENCIDO" ${estadoVal === 'VENCIDO' ? 'selected' : ''}>VENCIDO</option>
+                            </select>
+                        </td>
+                    `;
+                }
+
+                return `
+                    <tr draggable="true" ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="dropItem(event, '${categoria}')" data-id="${g.id}" class="hover:bg-slate-900/40 transition-colors border-b border-slate-800/40 text-xs cursor-default">
+                        <td class="px-4 py-3 text-white font-bold flex items-center gap-2">
+                            <span class="text-slate-500 hover:text-slate-300 cursor-grab active:cursor-grabbing p-1"><i class="fa-solid fa-grip-vertical"></i></span>
+                            ${g.concepto}
+                        </td>
+                        <td class="px-4 py-3 text-slate-400">${g.tipo}</td>
+                        <td class="px-4 py-3 text-slate-300 font-medium">${subcatNombre}</td>
+                        ${vencimientoCellHtml}
+                        <td class="px-4 py-3 font-mono text-amber-300 font-bold">${pctDisplay}</td>
+                        <td class="px-4 py-3 text-right font-extrabold text-white">${fmt(g.monto)}</td>
+                        ${estadoCellHtml}
+                        <td class="px-4 py-3 text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                <button onclick="editGasto('${g.id}')" class="text-slate-400 hover:text-white p-1" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
+                                <button onclick="deleteGasto('${g.id}')" class="text-slate-400 hover:text-rose-400 p-1" title="Eliminar"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        let controlesCabeceraHtml = '';
+        if (esBloque) {
+            const diferenciaCat = totalCat - montoPagadoCatActual;
+            const badgeCatPendiente = diferenciaCat > 0 
+                ? `<span class="block text-[9px] text-rose-400 font-bold text-right">Pasa $${diferenciaCat.toFixed(2)}</span>` 
+                : '';
+
+            controlesCabeceraHtml = `
+                <div class="flex items-center gap-3 flex-wrap" onclick="event.stopPropagation()">
+                    <div class="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase">VENC:</span>
+                        <input type="date" value="${vencimientoValFirst || ''}" onchange="actualizarVencimientoGrid('${gastosCat[0]?.id}', '${currentMonth}', this.value, '${categoria}')" class="bg-transparent text-amber-400 font-bold text-xs outline-none cursor-pointer">
+                    </div>
+                    <div class="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase">ESTADO:</span>
+                        <select onchange="actualizarEstadoGastoMasivo('${gastosCat[0]?.id}', this.value)" class="bg-transparent text-xs font-bold ${estadoValFirst === 'PAGADO' ? 'text-emerald-400' : (estadoValFirst === 'VENCIDO' ? 'text-rose-400' : 'text-amber-500')} outline-none cursor-pointer">
+                            <option value="PENDIENTE" ${estadoValFirst === 'PENDIENTE' ? 'selected' : ''}>PENDIENTE</option>
+                            <option value="PAGADO" ${estadoValFirst === 'PAGADO' ? 'selected' : ''}>PAGADO</option>
+                            <option value="VENCIDO" ${estadoValFirst === 'VENCIDO' ? 'selected' : ''}>VENCIDO</option>
+                        </select>
+                    </div>
+                    <div>
+                        <input type="number" step="0.01" value="${montoPagadoCatActual}" onchange="actualizarMontoPagadoCategoria('${categoria}', '${currentMonth}', this.value)" class="w-28 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-emerald-400 text-right focus:outline-none" title="Monto Pagado Total de la Tarjeta">
+                        ${badgeCatPendiente}
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML += `
+            <div class="bg-slate-900/60 rounded-xl overflow-hidden border border-slate-800/80 mb-3">
+                <div class="px-4 py-3 bg-slate-900/90 border-b border-slate-800/80 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-2 cursor-pointer select-none" onclick="toggleCategoriaAcordeon('${categoria}')">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <i class="fa-solid fa-chevron-${isAbierto ? 'down' : 'right'} text-xs text-slate-400"></i>
+                        <span class="w-3 h-3 rounded-full" style="background-color: ${colorCat};"></span>
+                        <span class="text-sm font-bold text-white">${categoria}</span>
+                        <span class="text-[11px] bg-slate-800 text-slate-400 px-2.5 py-0.5 rounded-full font-semibold">${gastosCat.length} ítem${gastosCat.length === 1 ? '' : 's'}</span>
+                        ${controlesCabeceraHtml}
+                    </div>
+                    <span class="text-sm font-extrabold text-emerald-400 shrink-0">TOTAL: ${fmt(totalCat)}</span>
+                </div>
+                ${isAbierto ? `
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="table-header text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                    <th class="px-4 py-3">CONCEPTO</th>
+                                    <th class="px-4 py-3">TIPO / CUOTAS</th>
+                                    <th class="px-4 py-3">SUB CATEGORIA</th>
+                                    ${!esBloque ? '<th class="px-4 py-3">VENCIMIENTO</th>' : ''}
+                                    <th class="px-4 py-3">% INFLACION</th>
+                                    <th class="px-4 py-3 text-right">MONTO</th>
+                                    ${!esBloque ? '<th class="px-4 py-3 text-center">ESTADO</th>' : ''}
+                                    <th class="px-4 py-3 text-right">ACCIONES</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800/60 text-sm font-medium">
+                                ${rowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    });
+};
+
+window.verificarLeonelaDirecto = async function() {
+    await setDoc(doc(db, "app_data", "personal_Ax3bwHzylYbXjCOGy5Y85e0Iu8R2"), { emailVerificado: true }, { merge: true });
+    console.log("¡Cuenta de Leonela verificada con éxito!");
+    alert("¡Cuenta verificada con éxito! Ya puede iniciar sesión.");
+};
+
+window.limpiarEspacioLeonela = async function() {
+    try {
+        const uidLeonela = "Ax3bwHzylYbXjCOGy5Y85e0Iu8R2";
+        
+        const dInit = new Date();
+        const mesActualStr = `${dInit.getFullYear()}-${String(dInit.getMonth() + 1).padStart(2, '0')}`;
+
+        const appStateLimpioTotal = {
+            currentMonth: mesActualStr,
+            gastos: [],
+            excepcionesMonto: {},
+            excepcionesCategoria: {},
+            excepcionesVencimiento: {},
+            excepcionesVencimientoGrid: {},
+            excepcionesEstado: {},
+            excepcionesEliminacion: {},
+            excepcionesEliminacionSoloMes: {},
+            aumentosIndividuales: {},
+            subcategorias: [
+                { id: "sub_alquiler", nombre: "Alquiler / Expensas", porcentajeAumento: 0 },
+                { id: "sub_servicios_basicos", nombre: "Servicios Básicos (Luz/Gas/Agua)", porcentajeAumento: 0 },
+                { id: "sub_conectividad", nombre: "Internet / Cable / Telefonía", porcentajeAumento: 0 },
+                { id: "sub_suscripciones", nombre: "Streaming y Suscripciones", porcentajeAumento: 0 }
+            ],
+            sueldos: {},
+            cuentasBancarias: [],
+            categorias: [
+                { nombre: "Gastos Fijo", color: "#10b981", esTarjeta: false, vencimientoUnicoEnBloque: false },
+                { nombre: "Servicios", color: "#f97316", esTarjeta: false, vencimientoUnicoEnBloque: false },
+                { nombre: "Santander Visa", color: "#ef4444", esTarjeta: true, vencimientoUnicoEnBloque: true },
+                { nombre: "Ciudad Visa", color: "#3b82f6", esTarjeta: true, vencimientoUnicoEnBloque: true },
+                { nombre: "Mercado Pago", color: "#f59e0b", esTarjeta: true, vencimientoUnicoEnBloque: true },
+                { nombre: "Santander Amex", color: "#f97316", esTarjeta: true, vencimientoUnicoEnBloque: true }
+            ],
+            recurrentesPreferidos: [],
+            sortColumn: 'concepto',
+            sortAscending: true,
+            grupoInfo: {
+                adminUid: uidLeonela,
+                miembros: {
+                    [uidLeonela]: { email: "sosaleonela2024@gmail.com", rol: "admin" }
+                },
+                invitacionesPendientes: []
+            }
+        };
+
+        await setDoc(doc(db, "app_data", `personal_${uidLeonela}`), {
+            appState: appStateLimpioTotal,
+            emailVerificado: true
+        }, { merge: false });
+
+        console.log("¡Espacio personal de Leonela limpiado por completo!");
+        alert("Espacio personal de Leonela blanqueado en todos los meses con éxito.");
+    } catch (e) {
+        console.error("Error al limpiar espacio personal:", e);
+    }
 };
