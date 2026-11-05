@@ -187,45 +187,6 @@ window.renderApp = function() {
     if (typeof originalRenderApp === 'function') {
         originalRenderApp();
     }
-
-    const currentMonth = window.appState.currentMonth || defaultLocalMonth;
-    
-    // Actualizar texto del selector de mes para evitar que quede en "Cargando..."
-    const displayMonth = document.getElementById('displayMonthText');
-    if (displayMonth) displayMonth.innerText = window.formatMonthDisplay(currentMonth);
-
-    const badgeMonth = document.getElementById('badgeMonth');
-    if (badgeMonth) badgeMonth.innerText = window.formatMonthDisplay(currentMonth);
-
-    // Calcular datos del mes actual
-    const datos = window.getCalculatedDataForMonth(currentMonth);
-
-    // Actualizar tarjetas de totales superiores
-    const elSueldo = document.getElementById('cardSueldo');
-    const elFijos = document.getElementById('cardGastosFijos');
-    const elTarjetas = document.getElementById('cardTarjetas');
-    const elTotales = document.getElementById('cardGastosTotales');
-    const elResto = document.getElementById('cardResto');
-
-    const fmt = num => "$ " + num.toLocaleString('es-AR', { minimumFractionDigits: 2 });
-
-    const gastosTotalesMes = datos.totalFijos + datos.totalTarjetas;
-    const restoDisponible = datos.sueldoActual - gastosTotalesMes;
-
-    if (elSueldo) elSueldo.innerText = fmt(datos.sueldoActual);
-    if (elFijos) elFijos.innerText = fmt(datos.totalFijos);
-    if (elTarjetas) elTarjetas.innerText = fmt(datos.totalTarjetas);
-    if (elTotales) elTotales.innerText = fmt(gastosTotalesMes);
-    if (elResto) {
-        elResto.innerText = fmt(restoDisponible);
-        elResto.className = `text-2xl font-extrabold my-1 ${restoDisponible >= 0 ? 'text-green-accent' : 'text-rose-500'}`;
-    }
-
-    // Renderizar la tabla de gastos agrupados
-    if (typeof window.renderPlanillaAgrupadaTabla === 'function') {
-        window.renderPlanillaAgrupadaTabla(datos.items);
-    }
-
     setTimeout(aplicarRestriccionesInterfaz, 100);
 };
 
@@ -361,7 +322,6 @@ const appStateLimpioBase = {
     currentMonth: defaultLocalMonth,
     gastos: [],
     excepcionesMonto: {},
-    excepcionesMontoPagadoCategoria: {},
     excepcionesCategoria: {},
     excepcionesVencimiento: {},
     excepcionesVencimientoGrid: {},
@@ -1573,24 +1533,6 @@ window.actualizarEstadoGastoMasivo = function(gastoId, nuevoEstado) {
     renderApp();
 };
 
-window.actualizarMontoPagadoCategoria = function(categoriaNombre, monthStr, nuevoMonto) {
-    if (!window.esUsuarioEditor()) {
-        window.mostrarNotificacion("Acceso denegado", "Tu cuenta tiene permisos de solo lectura.", "error");
-        return;
-    }
-
-    if (!window.appState.excepcionesMontoPagadoCategoria) {
-        window.appState.excepcionesMontoPagadoCategoria = {};
-    }
-
-    const valNum = parseFloat(nuevoMonto) || 0;
-    const key = `${categoriaNombre}_${monthStr}`;
-    window.appState.excepcionesMontoPagadoCategoria[key] = valNum;
-
-    window.saveDataToCloud();
-    renderApp();
-};
-
 // ==========================================
 // RENDERIZADO DE PLANILLA AGRUPADA (COLUMNAS DINÁMICAS SEGÚN MODO BLOQUE)
 // ==========================================
@@ -1659,6 +1601,10 @@ window.renderPlanillaAgrupadaTabla = function(items) {
                 const vencimientoVal = window.appState.excepcionesVencimientoGrid?.[gridKey] !== undefined ? window.appState.excepcionesVencimientoGrid[gridKey] : (g.vencimiento || '');
                 const estadoVal = g.estado || 'PENDIENTE';
 
+                const montoPagadoItemVal = window.appState.excepcionesMontoPagado?.[gridKey] !== undefined 
+                    ? window.appState.excepcionesMontoPagado[gridKey] 
+                    : g.monto;
+
                 const subcatIdActual = window.appState.excepcionesSubcategoria?.[gridKey] !== undefined ? window.appState.excepcionesSubcategoria[gridKey] : g.subcategoriaId;
                 const subcatObj = (window.appState.subcategorias || []).find(s => s.id === subcatIdActual);
                 const subcatNombre = subcatObj ? subcatObj.nombre : '-';
@@ -1673,15 +1619,21 @@ window.renderPlanillaAgrupadaTabla = function(items) {
 
                 let vencimientoCellHtml = '';
                 let estadoCellHtml = '';
+                let montoPagadoCellHtml = '';
 
                 if (!esBloque) {
                     vencimientoCellHtml = `
-                        <td class="px-4 py-3">
+                        <td class="px-4 py-3 align-middle">
                             <input type="date" value="${vencimientoVal}" onchange="actualizarVencimientoGrid('${g.id}', '${currentMonth}', this.value, '${categoria}')" class="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs ${vencimientoVal ? 'text-amber-400 font-bold border-amber-800/60 bg-amber-950/60' : 'text-slate-300'} focus:outline-none">
                         </td>
                     `;
+                    montoPagadoCellHtml = `
+                        <td class="px-4 py-3 align-middle">
+                            <input type="number" step="0.01" value="${parseFloat(montoPagadoItemVal).toFixed(2)}" onchange="actualizarMontoPagado('${g.id}', '${currentMonth}', this.value)" class="w-28 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-emerald-400 text-right focus:outline-none">
+                        </td>
+                    `;
                     estadoCellHtml = `
-                        <td class="px-4 py-3 text-center">
+                        <td class="px-4 py-3 text-center align-middle">
                             <select onchange="actualizarEstadoGasto('${g.id}', '${currentMonth}', this.value)" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-[11px] font-bold ${estadoVal === 'PAGADO' ? 'text-emerald-400' : (estadoVal === 'VENCIDO' ? 'text-rose-400' : 'text-amber-500')} focus:outline-none cursor-pointer">
                                 <option value="PENDIENTE" ${estadoVal === 'PENDIENTE' ? 'selected' : ''}>PENDIENTE</option>
                                 <option value="PAGADO" ${estadoVal === 'PAGADO' ? 'selected' : ''}>PAGADO</option>
@@ -1693,17 +1645,18 @@ window.renderPlanillaAgrupadaTabla = function(items) {
 
                 return `
                     <tr draggable="true" ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="dropItem(event, '${categoria}')" data-id="${g.id}" class="hover:bg-slate-900/40 transition-colors border-b border-slate-800/40 text-xs cursor-default">
-                        <td class="px-4 py-3 text-white font-bold flex items-center gap-2">
+                        <td class="px-4 py-3 text-white font-bold flex items-center gap-2 align-middle">
                             <span class="text-slate-500 hover:text-slate-300 cursor-grab active:cursor-grabbing p-1"><i class="fa-solid fa-grip-vertical"></i></span>
                             ${g.concepto}
                         </td>
-                        <td class="px-4 py-3 text-slate-400">${g.tipo}</td>
-                        <td class="px-4 py-3 text-slate-300 font-medium">${subcatNombre}</td>
+                        <td class="px-4 py-3 text-slate-400 align-middle">${g.tipo}</td>
+                        <td class="px-4 py-3 text-slate-300 font-medium align-middle">${subcatNombre}</td>
                         ${vencimientoCellHtml}
-                        <td class="px-4 py-3 font-mono text-amber-300 font-bold">${pctDisplay}</td>
-                        <td class="px-4 py-3 text-right font-extrabold text-white">${fmt(g.monto)}</td>
+                        <td class="px-4 py-3 font-mono text-amber-300 font-bold align-middle">${pctDisplay}</td>
+                        <td class="px-4 py-3 text-right font-extrabold text-white align-middle">${fmt(g.monto)}</td>
+                        ${!esBloque ? montoPagadoCellHtml : ''}
                         ${estadoCellHtml}
-                        <td class="px-4 py-3 text-right">
+                        <td class="px-4 py-3 text-right align-middle">
                             <div class="flex items-center justify-end gap-2">
                                 <button onclick="editGasto('${g.id}')" class="text-slate-400 hover:text-white p-1" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
                                 <button onclick="deleteGasto('${g.id}')" class="text-slate-400 hover:text-rose-400 p-1" title="Eliminar"><i class="fa-solid fa-trash-can text-xs"></i></button>
@@ -1723,11 +1676,11 @@ window.renderPlanillaAgrupadaTabla = function(items) {
 
             controlesCabeceraHtml = `
                 <div class="flex items-center gap-3 flex-wrap" onclick="event.stopPropagation()">
-                    <div class="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1">
+                    <div class="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5">
                         <span class="text-[10px] text-slate-400 font-bold uppercase">VENC:</span>
                         <input type="date" value="${vencimientoValFirst || ''}" onchange="actualizarVencimientoGrid('${gastosCat[0]?.id}', '${currentMonth}', this.value, '${categoria}')" class="bg-transparent text-amber-400 font-bold text-xs outline-none cursor-pointer">
                     </div>
-                    <div class="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1">
+                    <div class="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5">
                         <span class="text-[10px] text-slate-400 font-bold uppercase">ESTADO:</span>
                         <select onchange="actualizarEstadoGastoMasivo('${gastosCat[0]?.id}', this.value)" class="bg-transparent text-xs font-bold ${estadoValFirst === 'PAGADO' ? 'text-emerald-400' : (estadoValFirst === 'VENCIDO' ? 'text-rose-400' : 'text-amber-500')} outline-none cursor-pointer">
                             <option value="PENDIENTE" ${estadoValFirst === 'PENDIENTE' ? 'selected' : ''}>PENDIENTE</option>
@@ -1735,9 +1688,12 @@ window.renderPlanillaAgrupadaTabla = function(items) {
                             <option value="VENCIDO" ${estadoValFirst === 'VENCIDO' ? 'selected' : ''}>VENCIDO</option>
                         </select>
                     </div>
-                    <div>
-                        <input type="number" step="0.01" value="${montoPagadoCatActual}" onchange="actualizarMontoPagadoCategoria('${categoria}', '${currentMonth}', this.value)" class="w-28 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-emerald-400 text-right focus:outline-none" title="Monto Pagado Total de la Tarjeta">
-                        ${badgeCatPendiente}
+                    <div class="flex items-center gap-2 bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Monto Pagado:</span>
+                        <div>
+                            <input type="number" step="0.01" value="${parseFloat(montoPagadoCatActual).toFixed(2)}" onchange="actualizarMontoPagadoCategoria('${categoria}', '${currentMonth}', this.value)" class="w-28 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-emerald-400 text-right focus:outline-none" title="Monto Pagado Total">
+                            ${badgeCatPendiente}
+                        </div>
                     </div>
                 </div>
             `;
@@ -1745,7 +1701,7 @@ window.renderPlanillaAgrupadaTabla = function(items) {
 
         container.innerHTML += `
             <div class="bg-slate-900/60 rounded-xl overflow-hidden border border-slate-800/80 mb-3">
-                <div class="px-4 py-3 bg-slate-900/90 border-b border-slate-800/80 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-2 cursor-pointer select-none" onclick="toggleCategoriaAcordeon('${categoria}')">
+                <div class="px-4 py-3 bg-slate-900/90 border-b border-slate-800/80 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 cursor-pointer select-none" onclick="toggleCategoriaAcordeon('${categoria}')">
                     <div class="flex items-center gap-3 flex-wrap">
                         <i class="fa-solid fa-chevron-${isAbierto ? 'down' : 'right'} text-xs text-slate-400"></i>
                         <span class="w-3 h-3 rounded-full" style="background-color: ${colorCat};"></span>
@@ -1766,6 +1722,7 @@ window.renderPlanillaAgrupadaTabla = function(items) {
                                     ${!esBloque ? '<th class="px-4 py-3">VENCIMIENTO</th>' : ''}
                                     <th class="px-4 py-3">% INFLACION</th>
                                     <th class="px-4 py-3 text-right">MONTO</th>
+                                    ${!esBloque ? '<th class="px-4 py-3">MONTO PAGADO</th>' : ''}
                                     ${!esBloque ? '<th class="px-4 py-3 text-center">ESTADO</th>' : ''}
                                     <th class="px-4 py-3 text-right">ACCIONES</th>
                                 </tr>
