@@ -941,8 +941,25 @@ window.saveDataToCloud = async function() {
         if (!window.docRef) return;
         const appStateToSave = JSON.parse(JSON.stringify(window.appState));
         delete appStateToSave.gastosMensuales;
+        delete appStateToSave.excepcionesMontoPagado;
+        delete appStateToSave.excepcionesMontoPagadoBloque;
         await setDoc(window.docRef, { appState: appStateToSave }, { merge: true });
     } catch (e) { console.error(e); }
+};
+
+window.guardarMontoPagadoPlanilla = async function(key, monto, esBloque) {
+    if (!window.docRef) throw new Error("No hay un grupo activo para guardar el monto pagado.");
+    if (!window.esUsuarioEditor()) throw new Error("No tenés permiso para modificar los gastos.");
+    const campo = esBloque ? "excepcionesMontoPagadoBloque" : "excepcionesMontoPagado";
+    const mapaActualizado = await runTransaction(db, async transaction => {
+        const snapshot = await transaction.get(window.docRef);
+        if (!snapshot.exists()) throw new Error("No se encontró el grupo para guardar el monto pagado.");
+        const estadoRemoto = snapshot.data().appState || {};
+        const mapa = { ...(estadoRemoto[campo] || {}), [key]: monto };
+        transaction.update(window.docRef, { [`appState.${campo}`]: mapa });
+        return mapa;
+    });
+    window.appState[campo] = mapaActualizado;
 };
 
 window.agregarGastoMensualCompartido = async function(gasto) {
