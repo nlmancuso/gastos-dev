@@ -1649,9 +1649,21 @@ window.renderPlanillaAgrupadaTabla = function(items) {
     Object.entries(grupos).forEach(([categoria, gastosCat]) => {
         const catObj = catList.find(c => c.nombre === categoria);
         const colorCat = catObj ? catObj.color : '#64748b';
-        const totalCat = gastosCat.reduce((acc, g) => acc + g.monto, 0);
+        const totalCat = gastosCat.reduce((acc, g) => acc + g.monto, 0)
+            + (gastosCat.find(g => g.saldoAnteriorBloque !== undefined)?.saldoAnteriorBloque || 0);
+        const itemPagoBloque = gastosCat.find(g => g.montoDebidoBloque !== undefined);
+        const totalDebidoBloque = itemPagoBloque?.montoDebidoBloque ?? totalCat;
+        const totalPagadoBloque = itemPagoBloque?.montoPagadoBloque ?? totalDebidoBloque;
         const isAbierto = window.categoriasAbiertasMap[categoria] === true;
         const esBloque = catObj ? catObj.vencimientoUnicoEnBloque : false;
+        const estadoPagoBloque = totalPagadoBloque >= totalDebidoBloque
+            ? 'PAGADO'
+            : totalPagadoBloque > 0 ? 'PAGO PARCIAL' : 'PENDIENTE';
+        const colorEstadoPagoBloque = estadoPagoBloque === 'PAGADO'
+            ? 'text-emerald-400 bg-emerald-950/50 border-emerald-800/60'
+            : estadoPagoBloque === 'PAGO PARCIAL'
+                ? 'text-amber-400 bg-amber-950/50 border-amber-800/60'
+                : 'text-rose-400 bg-rose-950/50 border-rose-800/60';
 
         let vencimientoGrupo = '';
         gastosCat.forEach(g => { if (g.vencimiento && !vencimientoGrupo) vencimientoGrupo = g.vencimiento; });
@@ -1681,6 +1693,7 @@ window.renderPlanillaAgrupadaTabla = function(items) {
 
                 let vencimientoCellHtml = '';
                 let estadoCellHtml = '';
+                let montoPagadoCellHtml = '';
 
                 if (!esBloque) {
                     vencimientoCellHtml = `
@@ -1697,6 +1710,11 @@ window.renderPlanillaAgrupadaTabla = function(items) {
                             </select>
                         </td>
                     `;
+                    montoPagadoCellHtml = `
+                        <td class="px-4 py-3 text-right">
+                            <input type="number" min="0" max="${g.monto}" step="0.01" value="${g.montoPagado ?? g.monto}" data-id="${g.idPago || g.id}" onchange="actualizarMontoPagadoPlanilla(this, false)" ${window.esUsuarioEditor() ? '' : 'disabled'} class="w-28 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-right text-xs font-bold text-emerald-300 focus:outline-none focus:border-emerald-500 disabled:opacity-60" aria-label="Monto pagado de ${g.concepto}">
+                        </td>
+                    `;
                 }
 
                 return `
@@ -1710,6 +1728,7 @@ window.renderPlanillaAgrupadaTabla = function(items) {
                         ${vencimientoCellHtml}
                         <td class="px-4 py-3 font-mono text-amber-300 font-bold">${pctDisplay}</td>
                         <td class="px-4 py-3 text-right font-extrabold text-white">${fmt(g.monto)}</td>
+                        ${montoPagadoCellHtml}
                         ${estadoCellHtml}
                         <td class="px-4 py-3 text-right">
                             <div class="flex items-center justify-end gap-2">
@@ -1725,7 +1744,7 @@ window.renderPlanillaAgrupadaTabla = function(items) {
         let controlesCabeceraHtml = '';
         if (esBloque) {
             controlesCabeceraHtml = `
-                <div class="flex items-center gap-2" onclick="event.stopPropagation()">
+                <div class="flex flex-wrap items-center gap-2" onclick="event.stopPropagation()">
                     <div class="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-lg px-2 py-1">
                         <span class="text-[10px] text-slate-400 font-bold uppercase">Venc:</span>
                         <input type="date" value="${vencimientoValFirst || ''}" onchange="actualizarVencimientoGrid('${gastosCat[0]?.id}', '${currentMonth}', this.value, '${categoria}')" class="bg-transparent text-amber-400 font-bold text-xs outline-none cursor-pointer">
@@ -1738,6 +1757,11 @@ window.renderPlanillaAgrupadaTabla = function(items) {
                             <option value="VENCIDO" ${estadoValFirst === 'VENCIDO' ? 'selected' : ''}>VENCIDO</option>
                         </select>
                     </div>
+                    <label class="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-lg px-2 py-1">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase">Pagado:</span>
+                        <input type="number" min="0" max="${totalDebidoBloque}" step="0.01" value="${totalPagadoBloque}" data-categoria="${encodeURIComponent(categoria)}" onchange="actualizarMontoPagadoPlanilla(this, true)" ${window.esUsuarioEditor() ? '' : 'disabled'} class="w-24 bg-transparent text-emerald-300 font-bold text-xs outline-none disabled:opacity-60" aria-label="Monto pagado de ${categoria}">
+                    </label>
+                    <span class="text-[10px] font-bold border px-2 py-1 rounded-full ${colorEstadoPagoBloque}">${estadoPagoBloque}</span>
                 </div>
             `;
         }
@@ -1752,7 +1776,7 @@ window.renderPlanillaAgrupadaTabla = function(items) {
                         <span class="text-[11px] bg-slate-800 text-slate-400 px-2.5 py-0.5 rounded-full font-semibold">${gastosCat.length} ítem${gastosCat.length === 1 ? '' : 's'}</span>
                         ${controlesCabeceraHtml}
                     </div>
-                    <span class="text-sm font-extrabold text-emerald-400 shrink-0">TOTAL: ${fmt(totalCat)}</span>
+                    <span class="text-sm font-extrabold text-emerald-400 shrink-0">TOTAL: ${fmt(esBloque ? totalDebidoBloque : totalCat)}</span>
                 </div>
                 ${isAbierto ? `
                     <div class="overflow-x-auto">
@@ -1765,6 +1789,7 @@ window.renderPlanillaAgrupadaTabla = function(items) {
                                     ${!esBloque ? '<th class="px-4 py-3">VENCIMIENTO</th>' : ''}
                                     <th class="px-4 py-3">% INFLACION</th>
                                     <th class="px-4 py-3 text-right">MONTO</th>
+                                    ${!esBloque ? '<th class="px-4 py-3 text-right">MONTO PAGADO</th>' : ''}
                                     ${!esBloque ? '<th class="px-4 py-3 text-center">ESTADO</th>' : ''}
                                     <th class="px-4 py-3 text-right">ACCIONES</th>
                                 </tr>
