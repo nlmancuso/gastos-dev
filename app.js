@@ -119,6 +119,59 @@ window.esUsuarioEditor = function() {
 };
 
 // ==========================================
+// FUNCIONES DE ACTUALIZACIÓN DE GRILLA (MONTOS Y VENCIMIENTOS)
+// ==========================================
+
+window.actualizarMontoPagado = function(gastoId, monthStr, valor) {
+    if (!window.esUsuarioEditor()) {
+        window.mostrarNotificacion("Acceso denegado", "Tu cuenta tiene permisos de solo lectura.", "error");
+        return;
+    }
+    if (!window.appState.excepcionesMontoPagado) window.appState.excepcionesMontoPagado = {};
+    const key = `${gastoId}_${monthStr}`;
+    window.appState.excepcionesMontoPagado[key] = parseFloat(valor) || 0;
+    window.saveDataToCloud();
+    renderApp();
+};
+
+window.actualizarMontoPagadoCategoria = function(categoria, monthStr, valor) {
+    if (!window.esUsuarioEditor()) {
+        window.mostrarNotificacion("Acceso denegado", "Tu cuenta tiene permisos de solo lectura.", "error");
+        return;
+    }
+    if (!window.appState.excepcionesMontoPagadoCategoria) window.appState.excepcionesMontoPagadoCategoria = {};
+    const key = `${categoria}_${monthStr}`;
+    window.appState.excepcionesMontoPagadoCategoria[key] = parseFloat(valor) || 0;
+    window.saveDataToCloud();
+    renderApp();
+};
+
+window.actualizarVencimientoGrid = function(gastoId, monthStr, nuevaFecha, categoria) {
+    if (!window.esUsuarioEditor()) {
+        window.mostrarNotificacion("Acceso denegado", "Tu cuenta tiene permisos de solo lectura.", "error");
+        return;
+    }
+    if (!window.appState.excepcionesVencimientoGrid) window.appState.excepcionesVencimientoGrid = {};
+
+    const catObj = (window.appState.categorias || []).find(c => c.nombre === categoria);
+    const esEnBloque = catObj ? catObj.vencimientoUnicoEnBloque : false;
+
+    if (esEnBloque) {
+        const datosCalculados = window.getCalculatedDataForMonth(monthStr);
+        datosCalculados.items.forEach(item => {
+            if (item.categoria === categoria) {
+                window.appState.excepcionesVencimientoGrid[`${item.id}_${monthStr}`] = nuevaFecha;
+            }
+        });
+    } else {
+        window.appState.excepcionesVencimientoGrid[`${gastoId}_${monthStr}`] = nuevaFecha;
+    }
+
+    window.saveDataToCloud();
+    renderApp();
+};
+
+// ==========================================
 // APLICACIÓN DE ESTILOS Y RESTRICCIONES VISUALES
 // ==========================================
 
@@ -134,7 +187,6 @@ function aplicarRestriccionesInterfaz() {
 
     if (!esEditor) {
         styleTag.innerHTML = `
-            /* Ocultar botones de editar, eliminar, crear en la app principal (excluyendo login) */
             #appContent button[onclick*="edit"], 
             #appContent button[onclick*="delete"], 
             #appContent button[onclick*="openModal"],
@@ -144,7 +196,6 @@ function aplicarRestriccionesInterfaz() {
             #appContent button i.fa-pen, #appContent button i.fa-trash-can, #appContent button i.fa-trash {
                 display: none !important;
             }
-            /* Deshabilitar selects (excepto selector de vistas), inputs, textareas y BLOQUEAR ORDENAMIENTO Y ARRASTRE DE FILAS */
             #appContent select:not(#selectorVista), 
             #appContent input, 
             #appContent textarea, 
@@ -264,8 +315,6 @@ window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
                 [`appState.grupoInfo.miembros.${uidMiembro}.rol`]: nuevoRol
             });
 
-            console.log(`Rol actualizado en Firebase para ${uidMiembro} -> ${nuevoRol}`);
-            
             if (typeof window.showToast === 'function') {
                 window.showToast(`Rol actualizado a ${nuevoRol.toUpperCase()} correctamente`, 'success');
             } else {
@@ -322,6 +371,8 @@ const appStateLimpioBase = {
     currentMonth: defaultLocalMonth,
     gastos: [],
     excepcionesMonto: {},
+    excepcionesMontoPagado: {},
+    excepcionesMontoPagadoCategoria: {},
     excepcionesCategoria: {},
     excepcionesVencimiento: {},
     excepcionesVencimientoGrid: {},
