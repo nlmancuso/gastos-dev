@@ -1077,47 +1077,46 @@ window.navigateMonth = function(direction) {
 };
 
 // ==========================================
-// RENDERIZADO PRINCIPAL DE LA APP Y TARJETAS SUPERIORES
+// CORRECCIÓN PARA EL RENDERIZADO SUPERIOR Y MES
 // ==========================================
 
 function triggerPageRenders() {
-    actualizarVisibilidadBotonesAdmin();
+    if (typeof actualizarVisibilidadBotonesAdmin === 'function') {
+        actualizarVisibilidadBotonesAdmin();
+    }
     
     if (!window.appState.currentMonth) {
         window.appState.currentMonth = defaultLocalMonth;
     }
 
     const currentMonth = window.appState.currentMonth;
-    
-    // 1. Actualizar el mes en el selector superior ("Noviembre 2026", etc.)
     const monthHeader = document.getElementById('monthDisplay');
     if (monthHeader) {
-        monthHeader.innerText = window.formatMonthDisplay(currentMonth);
+        monthHeader.innerText = window.formatMonthDisplay ? window.formatMonthDisplay(currentMonth) : currentMonth;
     }
 
-    // 2. Calcular los datos económicos del mes activo
-    const calculatedData = window.getCalculatedDataForMonth(currentMonth);
-    
-    // 3. Actualizar las tarjetas de resumen superiores
-    const elSueldo = document.getElementById('sueldoDisplay');
-    const elTotalFijos = document.getElementById('totalFijosDisplay');
-    const elTotalTarjetas = document.getElementById('totalTarjetasDisplay');
-    const elGastosTotales = document.getElementById('gastosTotalesDisplay');
-    const elResto = document.getElementById('restoDisplay');
+    if (typeof window.getCalculatedDataForMonth === 'function') {
+        const calculatedData = window.getCalculatedDataForMonth(currentMonth);
+        
+        const elSueldo = document.getElementById('sueldoDisplay');
+        const elTotalFijos = document.getElementById('totalFijosDisplay');
+        const elTotalTarjetas = document.getElementById('totalTarjetasDisplay');
+        const elGastosTotales = document.getElementById('gastosTotalesDisplay');
+        const elResto = document.getElementById('restoDisplay');
 
-    const fmt = num => "$ " + num.toLocaleString('es-AR', { minimumFractionDigits: 2 });
-    const totalGeneral = calculatedData.totalFijos + calculatedData.totalTarjetas;
-    const resto = calculatedData.sueldoActual - totalGeneral;
+        const fmt = num => "$ " + num.toLocaleString('es-AR', { minimumFractionDigits: 2 });
+        const totalGeneral = calculatedData.totalFijos + calculatedData.totalTarjetas;
+        const resto = calculatedData.sueldoActual - totalGeneral;
 
-    if (elSueldo) elSueldo.innerText = fmt(calculatedData.sueldoActual);
-    if (elTotalFijos) elTotalFijos.innerText = fmt(calculatedData.totalFijos);
-    if (elTotalTarjetas) elTotalTarjetas.innerText = fmt(calculatedData.totalTarjetas);
-    if (elGastosTotales) elGastosTotales.innerText = fmt(totalGeneral);
-    if (elResto) elResto.innerText = fmt(resto);
+        if (elSueldo) elSueldo.innerText = fmt(calculatedData.sueldoActual);
+        if (elTotalFijos) elTotalFijos.innerText = fmt(calculatedData.totalFijos);
+        if (elTotalTarjetas) elTotalTarjetas.innerText = fmt(calculatedData.totalTarjetas);
+        if (elGastosTotales) elGastosTotales.innerText = fmt(totalGeneral);
+        if (elResto) elResto.innerText = fmt(resto);
 
-    // 4. Renderizar la planilla agrupada de abajo
-    if (typeof window.renderPlanillaAgrupadaTabla === 'function') {
-        window.renderPlanillaAgrupadaTabla(calculatedData.items);
+        if (typeof window.renderPlanillaAgrupadaTabla === 'function') {
+            window.renderPlanillaAgrupadaTabla(calculatedData.items);
+        }
     }
 }
 
