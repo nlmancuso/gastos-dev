@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, getDocs, onSnapshot, collection, addDoc, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, getDocs, onSnapshot, collection, addDoc, query, where, updateDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -321,6 +321,7 @@ const defaultLocalMonth = `${dInit.getFullYear()}-${String(dInit.getMonth() + 1)
 const appStateLimpioBase = {
     currentMonth: defaultLocalMonth,
     gastos: [],
+    gastosMensuales: [],
     excepcionesMonto: {},
     excepcionesCategoria: {},
     excepcionesVencimiento: {},
@@ -711,6 +712,7 @@ onAuthStateChanged(auth, async (user) => {
                     if (!window.appState.subcategorias) window.appState.subcategorias = JSON.parse(JSON.stringify(subcategoriasDefault));
                     if (!window.appState.aumentosIndividuales) window.appState.aumentosIndividuales = {};
                     if (!window.appState.excepcionesEliminacionSoloMes) window.appState.excepcionesEliminacionSoloMes = {};
+                    if (!Array.isArray(window.appState.gastosMensuales)) window.appState.gastosMensuales = [];
                     if (!window.appState.currentMonth) window.appState.currentMonth = currentLocalMonthStr;
                 }
             } else {
@@ -941,6 +943,29 @@ window.saveDataToCloud = async function() {
     } catch (e) { console.error(e); }
 };
 
+window.agregarGastoMensualCompartido = async function(gasto) {
+    if (!window.docRef) throw new Error("No hay un grupo activo para guardar el gasto mensual.");
+    await updateDoc(window.docRef, {
+        "appState.gastosMensuales": arrayUnion(gasto)
+    });
+};
+
+window.eliminarGastoMensualCompartido = async function(gasto) {
+    if (!window.docRef) throw new Error("No hay un grupo activo para eliminar el gasto mensual.");
+    await updateDoc(window.docRef, {
+        "appState.gastosMensuales": arrayRemove(gasto)
+    });
+};
+
+window.guardarCategoriasGastoMensual = async function(categorias, gastos) {
+    if (!window.docRef) throw new Error("No hay un grupo activo para guardar las categorías.");
+    if (!window.esUsuarioEditor()) throw new Error("No tenés permiso para modificar las categorías.");
+    await updateDoc(window.docRef, {
+        "appState.categoriasGastosMensuales": categorias,
+        "appState.gastosMensuales": gastos
+    });
+};
+
 window.saveHormigaDataToCloud = async function() {
     try {
         if (!window.docHormigaRef) return;
@@ -983,6 +1008,7 @@ function triggerPageRenders() {
     if (typeof renderApp === 'function') renderApp();
     if (typeof renderCharts === 'function') renderCharts();
     if (typeof renderSaldosApp === 'function') renderSaldosApp();
+    if (typeof renderGastoMensualApp === 'function') renderGastoMensualApp();
     if (typeof renderHormigaApp === 'function') renderHormigaApp();
 }
 
