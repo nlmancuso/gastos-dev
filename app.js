@@ -22,52 +22,6 @@ let unsubscribeSnapshot = null;
 let unsubscribeHormiga = null;
 let unsubscribeInvitaciones = null;
 
-// ==========================================
-// EXPORTACIÓN DE FUNCIONES AUXILIARES GLOBALES
-// ==========================================
-
-
-window.switchTab = function(tabId) {
-    const tabs = ['Planilla', 'Graficos', 'Saldos', 'Hormiga'];
-    tabs.forEach(t => {
-        const el = document.getElementById(`tab${t}`);
-        const btn = document.getElementById(`btnTab${t}`);
-        if (el) el.classList.add('hidden');
-        if (btn) btn.className = "px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors border-b-2 border-transparent";
-    });
-
-    const activeEl = document.getElementById(`tab${tabId}`);
-    const activeBtn = document.getElementById(`btnTab${tabId}`);
-    if (activeEl) activeEl.classList.remove('hidden');
-    if (activeBtn) activeBtn.className = "px-4 py-2 text-xs font-bold text-emerald-400 border-b-2 border-emerald-400 transition-colors";
-};
-
-window.openModalGasto = function(gastoId = null) {
-    const modal = document.getElementById('modalGasto');
-    if (modal) modal.classList.remove('hidden');
-};
-
-window.closeModal = function(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) modal.classList.add('hidden');
-};
-
-window.toggleCategoriaAcordeon = function(catNombre) {
-    window.categoriasAbiertasMap[catNombre] = !window.categoriasAbiertasMap[catNombre];
-    triggerPageRenders();
-};
-
-window.forzarVerificacionEmail = async function(emailObjetivo = "sosaleonela2024@gmail.com") {
-    try {
-        const uidLeonela = "Ax3bwHzylYbXjCOGy5Y85e0Iu8R2";
-        await setDoc(doc(db, "app_data", `personal_${uidLeonela}`), { emailVerificado: true }, { merge: true });
-        window.mostrarNotificacion("¡Éxito!", `La cuenta ${emailObjetivo} fue verificada correctamente.`, "exito");
-    } catch (e) {
-        console.error("Error al forzar verificación:", e);
-        window.mostrarNotificacion("Error", "No se pudo actualizar el estado de verificación.", "error");
-    }
-};
-
 // Helpers globales para Modales Estéticos
 window.mostrarNotificacion = function(titulo, mensaje, tipo = 'info', callback = null) {
     const modal = document.getElementById('modalNotificacion');
@@ -122,49 +76,6 @@ window.mostrarMensajeApp = function(titulo, mensaje, tipo = 'info') {
     }
 };
 
-window.triggerPageRenders = triggerPageRenders;
-
-window.triggerPageRenders = function() {
-    if (typeof actualizarVisibilidadBotonesAdmin === 'function') {
-        actualizarVisibilidadBotonesAdmin();
-    }
-    
-    if (!window.appState.currentMonth) {
-        window.appState.currentMonth = defaultLocalMonth;
-    }
-
-    const currentMonth = window.appState.currentMonth;
-    const monthHeader = document.getElementById('displayMonthText');
-    if (monthHeader) {
-        monthHeader.innerText = window.formatMonthDisplay ? window.formatMonthDisplay(currentMonth) : currentMonth;
-    }
-
-    if (typeof window.getCalculatedDataForMonth === 'function') {
-        const calculatedData = window.getCalculatedDataForMonth(currentMonth);
-        
-        const elSueldo = document.getElementById('sueldoDisplay');
-        const elTotalFijos = document.getElementById('totalFijosDisplay');
-        const elTotalTarjetas = document.getElementById('totalTarjetasDisplay');
-        const elGastosTotales = document.getElementById('gastosTotalesDisplay');
-        const elResto = document.getElementById('restoDisplay');
-
-        const fmt = num => "$ " + num.toLocaleString('es-AR', { minimumFractionDigits: 2 });
-        const totalGeneral = calculatedData.totalFijos + calculatedData.totalTarjetas;
-        const resto = calculatedData.sueldoActual - totalGeneral;
-
-        if (elSueldo) elSueldo.innerText = fmt(calculatedData.sueldoActual);
-        if (elTotalFijos) elTotalFijos.innerText = fmt(calculatedData.totalFijos);
-        if (elTotalTarjetas) elTotalTarjetas.innerText = fmt(calculatedData.totalTarjetas);
-        if (elGastosTotales) elGastosTotales.innerText = fmt(totalGeneral);
-        if (elResto) elResto.innerText = fmt(resto);
-
-        if (typeof window.renderPlanillaAgrupadaTabla === 'function') {
-            window.renderPlanillaAgrupadaTabla(calculatedData.items);
-        }
-    }
-};
-
-window.renderApp = window.triggerPageRenders;
 // ==========================================
 // CONTROL DE PERMISOS Y ROLES (LECTOR / EDITOR)
 // ==========================================
@@ -208,59 +119,6 @@ window.esUsuarioEditor = function() {
 };
 
 // ==========================================
-// FUNCIONES DE ACTUALIZACIÓN DE MONTO PAGADO Y VENCIMIENTOS
-// ==========================================
-
-window.actualizarMontoPagado = function(gastoId, monthStr, valor) {
-    if (!window.esUsuarioEditor()) {
-        window.mostrarNotificacion("Acceso denegado", "Tu cuenta tiene permisos de solo lectura.", "error");
-        return;
-    }
-    if (!window.appState.excepcionesMontoPagado) window.appState.excepcionesMontoPagado = {};
-    const key = `${gastoId}_${monthStr}`;
-    window.appState.excepcionesMontoPagado[key] = parseFloat(valor) || 0;
-    window.saveDataToCloud();
-    triggerPageRenders();
-};
-
-window.actualizarMontoPagadoCategoria = function(categoria, monthStr, valor) {
-    if (!window.esUsuarioEditor()) {
-        window.mostrarNotificacion("Acceso denegado", "Tu cuenta tiene permisos de solo lectura.", "error");
-        return;
-    }
-    if (!window.appState.excepcionesMontoPagadoCategoria) window.appState.excepcionesMontoPagadoCategoria = {};
-    const key = `${categoria}_${monthStr}`;
-    window.appState.excepcionesMontoPagadoCategoria[key] = parseFloat(valor) || 0;
-    window.saveDataToCloud();
-    triggerPageRenders();
-};
-
-window.actualizarVencimientoGrid = function(gastoId, monthStr, nuevaFecha, categoria) {
-    if (!window.esUsuarioEditor()) {
-        window.mostrarNotificacion("Acceso denegado", "Tu cuenta tiene permisos de solo lectura.", "error");
-        return;
-    }
-    if (!window.appState.excepcionesVencimientoGrid) window.appState.excepcionesVencimientoGrid = {};
-
-    const catObj = (window.appState.categorias || []).find(c => c.nombre === categoria);
-    const esEnBloque = catObj ? catObj.vencimientoUnicoEnBloque : false;
-
-    if (esEnBloque) {
-        const datosCalculados = window.getCalculatedDataForMonth(monthStr);
-        datosCalculados.items.forEach(item => {
-            if (item.categoria === categoria) {
-                window.appState.excepcionesVencimientoGrid[`${item.id}_${monthStr}`] = nuevaFecha;
-            }
-        });
-    } else {
-        window.appState.excepcionesVencimientoGrid[`${gastoId}_${monthStr}`] = nuevaFecha;
-    }
-
-    window.saveDataToCloud();
-    triggerPageRenders();
-};
-
-// ==========================================
 // APLICACIÓN DE ESTILOS Y RESTRICCIONES VISUALES
 // ==========================================
 
@@ -276,6 +134,7 @@ function aplicarRestriccionesInterfaz() {
 
     if (!esEditor) {
         styleTag.innerHTML = `
+            /* Ocultar botones de editar, eliminar, crear en la app principal (excluyendo login) */
             #appContent button[onclick*="edit"], 
             #appContent button[onclick*="delete"], 
             #appContent button[onclick*="openModal"],
@@ -285,6 +144,7 @@ function aplicarRestriccionesInterfaz() {
             #appContent button i.fa-pen, #appContent button i.fa-trash-can, #appContent button i.fa-trash {
                 display: none !important;
             }
+            /* Deshabilitar selects (excepto selector de vistas), inputs, textareas y BLOQUEAR ORDENAMIENTO Y ARRASTRE DE FILAS */
             #appContent select:not(#selectorVista), 
             #appContent input, 
             #appContent textarea, 
@@ -321,6 +181,14 @@ function aplicarRestriccionesInterfaz() {
         });
     }
 }
+
+const originalRenderApp = window.renderApp || function(){};
+window.renderApp = function() {
+    if (typeof originalRenderApp === 'function') {
+        originalRenderApp();
+    }
+    setTimeout(aplicarRestriccionesInterfaz, 100);
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(aplicarRestriccionesInterfaz, 500);
@@ -396,6 +264,8 @@ window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
                 [`appState.grupoInfo.miembros.${uidMiembro}.rol`]: nuevoRol
             });
 
+            console.log(`Rol actualizado en Firebase para ${uidMiembro} -> ${nuevoRol}`);
+            
             if (typeof window.showToast === 'function') {
                 window.showToast(`Rol actualizado a ${nuevoRol.toUpperCase()} correctamente`, 'success');
             } else {
@@ -404,8 +274,8 @@ window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
 
             if (typeof window.renderModalGrupo === 'function') {
                 window.renderModalGrupo();
-            } else {
-                triggerPageRenders();
+            } else if (typeof window.renderApp === 'function') {
+                window.renderApp();
             }
         }
     } catch (error) {
@@ -452,8 +322,6 @@ const appStateLimpioBase = {
     currentMonth: defaultLocalMonth,
     gastos: [],
     excepcionesMonto: {},
-    excepcionesMontoPagado: {},
-    excepcionesMontoPagadoCategoria: {},
     excepcionesCategoria: {},
     excepcionesVencimiento: {},
     excepcionesVencimientoGrid: {},
@@ -1110,7 +978,13 @@ function actualizarVisibilidadBotonesAdmin() {
     }
 }
 
-
+function triggerPageRenders() {
+    actualizarVisibilidadBotonesAdmin();
+    if (typeof renderApp === 'function') renderApp();
+    if (typeof renderCharts === 'function') renderCharts();
+    if (typeof renderSaldosApp === 'function') renderSaldosApp();
+    if (typeof renderHormigaApp === 'function') renderHormigaApp();
+}
 
 window.navigateMonth = function(direction) {
     let [year, month] = (window.appState.currentMonth || defaultLocalMonth).split('-').map(Number);
@@ -1119,69 +993,6 @@ window.navigateMonth = function(direction) {
     window.appState.currentMonth = `${year}-${String(month).padStart(2, '0')}`;
     triggerPageRenders();
 };
-
-// ==========================================
-// CORRECCIÓN PARA EL RENDERIZADO SUPERIOR Y MES
-// ==========================================
-
-function triggerPageRenders() {
-    if (typeof actualizarVisibilidadBotonesAdmin === 'function') {
-        actualizarVisibilidadBotonesAdmin();
-    }
-    
-    if (!window.appState.currentMonth) {
-        window.appState.currentMonth = defaultLocalMonth;
-    }
-
-    const currentMonth = window.appState.currentMonth;
-    const monthHeader = document.getElementById('displayMonthText');
-    if (monthHeader) {
-        monthHeader.innerText = window.formatMonthDisplay ? window.formatMonthDisplay(currentMonth) : currentMonth;
-    }
-
-    if (typeof window.getCalculatedDataForMonth === 'function') {
-        const calculatedData = window.getCalculatedDataForMonth(currentMonth);
-        
-        const elSueldo = document.getElementById('sueldoDisplay');
-        const elTotalFijos = document.getElementById('totalFijosDisplay');
-        const elTotalTarjetas = document.getElementById('totalTarjetasDisplay');
-        const elGastosTotales = document.getElementById('gastosTotalesDisplay');
-        const elResto = document.getElementById('restoDisplay');
-
-        const fmt = num => "$ " + num.toLocaleString('es-AR', { minimumFractionDigits: 2 });
-        const totalGeneral = calculatedData.totalFijos + calculatedData.totalTarjetas;
-        const resto = calculatedData.sueldoActual - totalGeneral;
-
-        if (elSueldo) elSueldo.innerText = fmt(calculatedData.sueldoActual);
-        if (elTotalFijos) elTotalFijos.innerText = fmt(calculatedData.totalFijos);
-        if (elTotalTarjetas) elTotalTarjetas.innerText = fmt(calculatedData.totalTarjetas);
-        if (elGastosTotales) elGastosTotales.innerText = fmt(totalGeneral);
-        if (elResto) elResto.innerText = fmt(resto);
-
-        if (typeof window.renderPlanillaAgrupadaTabla === 'function') {
-            window.renderPlanillaAgrupadaTabla(calculatedData.items);
-        }
-    }
-}
-
-window.renderApp = triggerPageRenders;
-
-window.navigateMonth = function(direction) {
-    let [year, month] = (window.appState.currentMonth || defaultLocalMonth).split('-').map(Number);
-    month += direction;
-    if (month > 12) { month = 1; year++; } 
-    if (month < 1) { month = 12; year--; }
-    window.appState.currentMonth = `${year}-${String(month).padStart(2, '0')}`;
-    triggerPageRenders();
-};
-
-window.formatMonthDisplay = function(ymStr) {
-    if (!ymStr) return '';
-    const [year, month] = ymStr.split('-').map(Number);
-    return `${monthNames[month - 1]} ${year}`;
-};
-
-window.renderApp = triggerPageRenders;
 
 window.formatMonthDisplay = function(ymStr) {
     if (!ymStr) return '';
@@ -1685,7 +1496,7 @@ window.actualizarEstadoGasto = function(gastoId, monthStr, nuevoEstado) {
     }
 
     window.saveDataToCloud(); 
-    triggerPageRenders();
+    renderApp();
 };
 
 window.actualizarEstadoGastoMasivo = function(gastoId, nuevoEstado) {
@@ -1719,7 +1530,7 @@ window.actualizarEstadoGastoMasivo = function(gastoId, nuevoEstado) {
     }
 
     window.saveDataToCloud();
-    triggerPageRenders();
+    renderApp();
 };
 
 // ==========================================
@@ -1767,12 +1578,6 @@ window.renderPlanillaAgrupadaTabla = function(items) {
         const catObj = catList.find(c => c.nombre === categoria);
         const colorCat = catObj ? catObj.color : '#64748b';
         const totalCat = gastosCat.reduce((acc, g) => acc + g.monto, 0);
-
-        const categoriaPagadoKey = `${categoria}_${currentMonth}`;
-        const montoPagadoCatActual = window.appState.excepcionesMontoPagadoCategoria?.[categoriaPagadoKey] !== undefined
-            ? parseFloat(window.appState.excepcionesMontoPagadoCategoria[categoriaPagadoKey])
-            : totalCat;
-
         const isAbierto = window.categoriasAbiertasMap[categoria] === true;
         const esBloque = catObj ? catObj.vencimientoUnicoEnBloque : false;
 
@@ -1790,10 +1595,6 @@ window.renderPlanillaAgrupadaTabla = function(items) {
                 const vencimientoVal = window.appState.excepcionesVencimientoGrid?.[gridKey] !== undefined ? window.appState.excepcionesVencimientoGrid[gridKey] : (g.vencimiento || '');
                 const estadoVal = g.estado || 'PENDIENTE';
 
-                const montoPagadoItemVal = window.appState.excepcionesMontoPagado?.[gridKey] !== undefined 
-                    ? window.appState.excepcionesMontoPagado[gridKey] 
-                    : g.monto;
-
                 const subcatIdActual = window.appState.excepcionesSubcategoria?.[gridKey] !== undefined ? window.appState.excepcionesSubcategoria[gridKey] : g.subcategoriaId;
                 const subcatObj = (window.appState.subcategorias || []).find(s => s.id === subcatIdActual);
                 const subcatNombre = subcatObj ? subcatObj.nombre : '-';
@@ -1808,21 +1609,15 @@ window.renderPlanillaAgrupadaTabla = function(items) {
 
                 let vencimientoCellHtml = '';
                 let estadoCellHtml = '';
-                let montoPagadoCellHtml = '';
 
                 if (!esBloque) {
                     vencimientoCellHtml = `
-                        <td class="px-4 py-3 align-middle">
+                        <td class="px-4 py-3">
                             <input type="date" value="${vencimientoVal}" onchange="actualizarVencimientoGrid('${g.id}', '${currentMonth}', this.value, '${categoria}')" class="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs ${vencimientoVal ? 'text-amber-400 font-bold border-amber-800/60 bg-amber-950/60' : 'text-slate-300'} focus:outline-none">
                         </td>
                     `;
-                    montoPagadoCellHtml = `
-                        <td class="px-4 py-3 align-middle">
-                            <input type="number" step="0.01" value="${parseFloat(montoPagadoItemVal).toFixed(2)}" onchange="actualizarMontoPagado('${g.id}', '${currentMonth}', this.value)" class="w-28 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-emerald-400 text-right focus:outline-none">
-                        </td>
-                    `;
                     estadoCellHtml = `
-                        <td class="px-4 py-3 text-center align-middle">
+                        <td class="px-4 py-3 text-center">
                             <select onchange="actualizarEstadoGasto('${g.id}', '${currentMonth}', this.value)" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-[11px] font-bold ${estadoVal === 'PAGADO' ? 'text-emerald-400' : (estadoVal === 'VENCIDO' ? 'text-rose-400' : 'text-amber-500')} focus:outline-none cursor-pointer">
                                 <option value="PENDIENTE" ${estadoVal === 'PENDIENTE' ? 'selected' : ''}>PENDIENTE</option>
                                 <option value="PAGADO" ${estadoVal === 'PAGADO' ? 'selected' : ''}>PAGADO</option>
@@ -1834,18 +1629,17 @@ window.renderPlanillaAgrupadaTabla = function(items) {
 
                 return `
                     <tr draggable="true" ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="dropItem(event, '${categoria}')" data-id="${g.id}" class="hover:bg-slate-900/40 transition-colors border-b border-slate-800/40 text-xs cursor-default">
-                        <td class="px-4 py-3 text-white font-bold flex items-center gap-2 align-middle">
+                        <td class="px-4 py-3 text-white font-bold flex items-center gap-2">
                             <span class="text-slate-500 hover:text-slate-300 cursor-grab active:cursor-grabbing p-1"><i class="fa-solid fa-grip-vertical"></i></span>
                             ${g.concepto}
                         </td>
-                        <td class="px-4 py-3 text-slate-400 align-middle">${g.tipo}</td>
-                        <td class="px-4 py-3 text-slate-300 font-medium align-middle">${subcatNombre}</td>
+                        <td class="px-4 py-3 text-slate-400">${g.tipo}</td>
+                        <td class="px-4 py-3 text-slate-300 font-medium">${subcatNombre}</td>
                         ${vencimientoCellHtml}
-                        <td class="px-4 py-3 font-mono text-amber-300 font-bold align-middle">${pctDisplay}</td>
-                        <td class="px-4 py-3 text-right font-extrabold text-white align-middle">${fmt(g.monto)}</td>
-                        ${!esBloque ? montoPagadoCellHtml : ''}
+                        <td class="px-4 py-3 font-mono text-amber-300 font-bold">${pctDisplay}</td>
+                        <td class="px-4 py-3 text-right font-extrabold text-white">${fmt(g.monto)}</td>
                         ${estadoCellHtml}
-                        <td class="px-4 py-3 text-right align-middle">
+                        <td class="px-4 py-3 text-right">
                             <div class="flex items-center justify-end gap-2">
                                 <button onclick="editGasto('${g.id}')" class="text-slate-400 hover:text-white p-1" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
                                 <button onclick="deleteGasto('${g.id}')" class="text-slate-400 hover:text-rose-400 p-1" title="Eliminar"><i class="fa-solid fa-trash-can text-xs"></i></button>
@@ -1858,31 +1652,19 @@ window.renderPlanillaAgrupadaTabla = function(items) {
 
         let controlesCabeceraHtml = '';
         if (esBloque) {
-            const diferenciaCat = totalCat - montoPagadoCatActual;
-            const badgeCatPendiente = diferenciaCat > 0 
-                ? `<span class="block text-[9px] text-rose-400 font-bold text-right">Pasa $${diferenciaCat.toFixed(2)}</span>` 
-                : '';
-
             controlesCabeceraHtml = `
-                <div class="flex items-center gap-3 flex-wrap" onclick="event.stopPropagation()">
-                    <div class="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5">
-                        <span class="text-[10px] text-slate-400 font-bold uppercase">VENC:</span>
+                <div class="flex items-center gap-2" onclick="event.stopPropagation()">
+                    <div class="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-lg px-2 py-1">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase">Venc:</span>
                         <input type="date" value="${vencimientoValFirst || ''}" onchange="actualizarVencimientoGrid('${gastosCat[0]?.id}', '${currentMonth}', this.value, '${categoria}')" class="bg-transparent text-amber-400 font-bold text-xs outline-none cursor-pointer">
                     </div>
-                    <div class="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5">
-                        <span class="text-[10px] text-slate-400 font-bold uppercase">ESTADO:</span>
+                    <div class="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-lg px-2 py-1">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase">Estado:</span>
                         <select onchange="actualizarEstadoGastoMasivo('${gastosCat[0]?.id}', this.value)" class="bg-transparent text-xs font-bold ${estadoValFirst === 'PAGADO' ? 'text-emerald-400' : (estadoValFirst === 'VENCIDO' ? 'text-rose-400' : 'text-amber-500')} outline-none cursor-pointer">
                             <option value="PENDIENTE" ${estadoValFirst === 'PENDIENTE' ? 'selected' : ''}>PENDIENTE</option>
                             <option value="PAGADO" ${estadoValFirst === 'PAGADO' ? 'selected' : ''}>PAGADO</option>
                             <option value="VENCIDO" ${estadoValFirst === 'VENCIDO' ? 'selected' : ''}>VENCIDO</option>
                         </select>
-                    </div>
-                    <div class="flex items-center gap-2 bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5">
-                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Monto Pagado:</span>
-                        <div>
-                            <input type="number" step="0.01" value="${parseFloat(montoPagadoCatActual).toFixed(2)}" onchange="actualizarMontoPagadoCategoria('${categoria}', '${currentMonth}', this.value)" class="w-28 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-emerald-400 text-right focus:outline-none" title="Monto Pagado Total">
-                            ${badgeCatPendiente}
-                        </div>
                     </div>
                 </div>
             `;
@@ -1890,7 +1672,7 @@ window.renderPlanillaAgrupadaTabla = function(items) {
 
         container.innerHTML += `
             <div class="bg-slate-900/60 rounded-xl overflow-hidden border border-slate-800/80 mb-3">
-                <div class="px-4 py-3 bg-slate-900/90 border-b border-slate-800/80 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 cursor-pointer select-none" onclick="toggleCategoriaAcordeon('${categoria}')">
+                <div class="px-4 py-3 bg-slate-900/90 border-b border-slate-800/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 cursor-pointer select-none" onclick="toggleCategoriaAcordeon('${categoria}')">
                     <div class="flex items-center gap-3 flex-wrap">
                         <i class="fa-solid fa-chevron-${isAbierto ? 'down' : 'right'} text-xs text-slate-400"></i>
                         <span class="w-3 h-3 rounded-full" style="background-color: ${colorCat};"></span>
@@ -1911,7 +1693,6 @@ window.renderPlanillaAgrupadaTabla = function(items) {
                                     ${!esBloque ? '<th class="px-4 py-3">VENCIMIENTO</th>' : ''}
                                     <th class="px-4 py-3">% INFLACION</th>
                                     <th class="px-4 py-3 text-right">MONTO</th>
-                                    ${!esBloque ? '<th class="px-4 py-3">MONTO PAGADO</th>' : ''}
                                     ${!esBloque ? '<th class="px-4 py-3 text-center">ESTADO</th>' : ''}
                                     <th class="px-4 py-3 text-right">ACCIONES</th>
                                 </tr>
@@ -1988,5 +1769,37 @@ window.limpiarEspacioLeonela = async function() {
         alert("Espacio personal de Leonela blanqueado en todos los meses con éxito.");
     } catch (e) {
         console.error("Error al limpiar espacio personal:", e);
+    }
+};
+
+window.forzarVerificacionEmail = async function(emailObjetivo = "sosaleonela2024@gmail.com") {
+    try {
+        const querySnapshot = await getDocs(collection(db, "app_data"));
+        let encontrado = false;
+
+        querySnapshot.forEach(async (docSnap) => {
+            const data = docSnap.data();
+            const grupoInfo = data.appState?.grupoInfo;
+            
+            // Buscar si el UID pertenece al email en los miembros de su espacio personal
+            if (docSnap.id.startsWith("personal_")) {
+                const uidDoc = docSnap.id.replace("personal_", "");
+                // Verificamos si este documento coincide o si lo buscamos por email en auth/firestore
+                // O de forma directa si conoces el UID (ej: Ax3bwHzylYbXjCOGy5Y85e0Iu8R2)
+                await setDoc(doc(db, "app_data", docSnap.id), { emailVerificado: true }, { merge: true });
+                console.log(`Verificado documento: ${docSnap.id}`);
+                encontrado = true;
+            }
+        });
+
+        // Alternativa directa por el UID conocido de Leonela si ya lo tenés identificado:
+        const uidLeonela = "Ax3bwHzylYbXjCOGy5Y85e0Iu8R2";
+        await setDoc(doc(db, "app_data", `personal_${uidLeonela}`), { emailVerificado: true }, { merge: true });
+        
+        console.log(`¡Cuenta de ${emailObjetivo} forzada a VERIFICADA con éxito!`);
+        alert(`¡Cuenta de ${emailObjetivo} verificada correctamente! Ya puede iniciar sesión.`);
+    } catch (e) {
+        console.error("Error al forzar la verificación:", e);
+        alert("Hubo un error al intentar verificar la cuenta.");
     }
 };
