@@ -26,7 +26,6 @@ let unsubscribeInvitaciones = null;
 // EXPORTACIÓN DE FUNCIONES AUXILIARES GLOBALES
 // ==========================================
 
-window.triggerPageRenders = triggerPageRenders;
 
 window.switchTab = function(tabId) {
     const tabs = ['Planilla', 'Graficos', 'Saldos', 'Hormiga'];
@@ -123,6 +122,7 @@ window.mostrarMensajeApp = function(titulo, mensaje, tipo = 'info') {
     }
 };
 
+window.triggerPageRenders = triggerPageRenders;
 // ==========================================
 // CONTROL DE PERMISOS Y ROLES (LECTOR / EDITOR)
 // ==========================================
