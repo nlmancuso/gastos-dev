@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, getDocs, onSnapshot, collection, addDoc, query, where, updateDoc, arrayRemove, arrayUnion, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { renderActiveView } from "./view-renderer.mjs";
 
 const firebaseConfig = {
     apiKey: "AIzaSyDwRTcVpwoHJfTZ-eUr5ileTks5LN-npOE",
@@ -17,6 +18,7 @@ const auth = getAuth(app);
 
 window.db = db;
 window.auth = auth;
+window.renderActiveView = renderActiveView;
 
 let unsubscribeSnapshot = null;
 let unsubscribeHormiga = null;
@@ -967,7 +969,11 @@ window.agregarGastoMensualCompartido = async function(gasto) {
     await updateDoc(window.docRef, {
         "appState.gastosMensuales": arrayUnion(gasto)
     });
-    window.appState.gastosMensuales = [...(window.appState.gastosMensuales || []), gasto];
+    const gastosActuales = window.appState.gastosMensuales || [];
+    window.appState.gastosMensuales = [
+        ...gastosActuales.filter(item => item.id !== gasto.id),
+        gasto
+    ];
 };
 
 window.eliminarGastoMensualCompartido = async function(gastoId) {
@@ -1052,10 +1058,6 @@ function actualizarVisibilidadBotonesAdmin() {
 function triggerPageRenders() {
     actualizarVisibilidadBotonesAdmin();
     if (typeof renderApp === 'function') renderApp();
-    if (typeof renderCharts === 'function') renderCharts();
-    if (typeof renderSaldosApp === 'function') renderSaldosApp();
-    if (typeof renderGastoMensualApp === 'function') renderGastoMensualApp();
-    if (typeof renderHormigaApp === 'function') renderHormigaApp();
 }
 
 window.navigateMonth = function(direction) {
@@ -1657,9 +1659,9 @@ window.renderPlanillaAgrupadaTabla = function(items) {
         const isAbierto = window.categoriasAbiertasMap[categoria] === true;
         const esBloque = catObj ? catObj.vencimientoUnicoEnBloque : false;
         const estadoPagoBloque = totalPagadoBloque >= totalDebidoBloque
-            ? 'PAGADO'
+            ? 'TOTAL'
             : totalPagadoBloque > 0 ? 'PAGO PARCIAL' : 'PENDIENTE';
-        const colorEstadoPagoBloque = estadoPagoBloque === 'PAGADO'
+        const colorEstadoPagoBloque = estadoPagoBloque === 'TOTAL'
             ? 'text-emerald-400 bg-emerald-950/50 border-emerald-800/60'
             : estadoPagoBloque === 'PAGO PARCIAL'
                 ? 'text-amber-400 bg-amber-950/50 border-amber-800/60'
