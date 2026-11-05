@@ -163,6 +163,7 @@ select option {
                 <button onclick="switchTab('planilla')" id="btnTabPlanilla" class="px-5 py-2.5 text-sm font-semibold tab-btn-active flex items-center gap-2 cursor-pointer"><i class="fa-solid fa-table-list"></i> Planilla de Gastos</button>
                 <button onclick="switchTab('analisis')" id="btnTabAnalisis" class="px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-white flex items-center gap-2 cursor-pointer"><i class="fa-solid fa-chart-pie"></i> Análisis y Gráficos</button>
                 <button onclick="switchTab('saldos')" id="btnTabSaldos" class="px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-white flex items-center gap-2 cursor-pointer"><i class="fa-solid fa-building-columns text-emerald-400"></i> Saldos y Bancos</button>
+                <button onclick="switchTab('mensual')" id="btnTabMensual" class="px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-white flex items-center gap-2 cursor-pointer"><i class="fa-solid fa-receipt text-sky-400"></i> Gasto Mensual</button>
                 <button onclick="switchTab('hormiga')" id="btnTabHormiga" class="px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-white flex items-center gap-2 cursor-pointer"><i class="fa-solid fa-cookie-bite text-amber-400"></i> Gastos Hormiga <span class="bg-amber-500/20 text-amber-400 text-[10px] px-1.5 py-0.5 rounded font-mono">Privado</span></button>
             </div>
         </header>
@@ -345,6 +346,122 @@ select option {
             </div>
             <div id="containerResumenDisponibles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
             <div id="containerBancosGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </section>
+
+        <!-- ==================== SECCIÓN 4: GASTO MENSUAL COMPARTIDO ==================== -->
+        <section id="viewMensual" class="max-w-7xl mx-auto px-4 py-4 space-y-6 hidden">
+            <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-sky-300 text-xs font-medium">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-xl bg-sky-950/80 border border-sky-800/60 flex items-center justify-center text-sky-400 shrink-0">
+                        <i class="fa-solid fa-users text-sm"></i>
+                    </div>
+                    <div>
+                        <p class="font-bold text-sky-200">Gastos compartidos del grupo</p>
+                        <p>Los integrantes del grupo pueden consultar estos gastos. Los usuarios con permiso de escritura también pueden agregarlos y eliminarlos.</p>
+                    </div>
+                </div>
+                <button id="btnCategoriasGastoMensual" onclick="openModalCategoriasGastoMensual()" class="hidden w-full sm:w-auto bg-sky-600 hover:bg-sky-500 text-white font-bold px-4 py-2.5 rounded-xl shadow-lg transition flex items-center justify-center gap-2 shrink-0">
+                    <i class="fa-solid fa-tags"></i> Categorías
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="card-bg p-5 rounded-2xl">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">TOTAL DEL MES</span>
+                    <h2 id="cardGastoMensualTotal" class="text-2xl font-extrabold text-sky-400 my-1">$ 0,00</h2>
+                </div>
+                <div class="card-bg p-5 rounded-2xl">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">PROMEDIO DIARIO</span>
+                    <h2 id="cardGastoMensualPromedio" class="text-2xl font-extrabold text-blue-400 my-1">$ 0,00</h2>
+                </div>
+                <div class="card-bg p-5 rounded-2xl">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">CANTIDAD DE GASTOS</span>
+                    <h2 id="cardGastoMensualCantidad" class="text-2xl font-extrabold text-emerald-400 my-1">0 gastos</h2>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div id="formGastoMensualContainer" class="card-bg p-6 rounded-2xl h-fit">
+                    <h3 id="tituloFormGastoMensual" class="text-base font-bold text-white mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-plus-circle text-sky-400"></i> Registrar Gasto Mensual
+                    </h3>
+                    <form id="formGastoMensual" onsubmit="handleSaveGastoMensual(event)" class="space-y-4">
+                        <div>
+                            <label for="gastoMensualConcepto" class="block text-xs font-bold text-slate-400 uppercase mb-1">Descripción</label>
+                            <input type="text" id="gastoMensualConcepto" maxlength="120" required placeholder="Ej: Compra del supermercado" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label for="gastoMensualMonto" class="block text-xs font-bold text-slate-400 uppercase mb-1">Monto ($)</label>
+                                <input type="number" id="gastoMensualMonto" min="0.01" step="0.01" required placeholder="0.00" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white">
+                            </div>
+                            <div>
+                                <label for="gastoMensualFecha" class="block text-xs font-bold text-slate-400 uppercase mb-1">Fecha</label>
+                                <input type="date" id="gastoMensualFecha" required class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
+                            </div>
+                        </div>
+                        <div>
+                            <label for="gastoMensualCategoria" class="block text-xs font-bold text-slate-400 uppercase mb-1">Categoría</label>
+                            <select id="gastoMensualCategoria" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white">
+                            </select>
+                        </div>
+                        <div>
+                            <label for="gastoMensualMedioPago" class="block text-xs font-bold text-slate-400 uppercase mb-1">Medio de pago</label>
+                            <select id="gastoMensualMedioPago" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white">
+                                <option value="Mercado Pago">Mercado Pago</option>
+                                <option value="Efectivo">Efectivo</option>
+                                <option value="Débito">Débito</option>
+                                <option value="Tarjeta de Crédito">Tarjeta de Crédito</option>
+                                <option value="Otros">Otros</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-floppy-disk"></i> Guardar gasto
+                        </button>
+                    </form>
+                    <p id="gastoMensualSoloLectura" class="hidden mt-4 text-xs text-slate-400">Tenés permiso de solo lectura en este grupo.</p>
+                </div>
+
+                <div class="lg:col-span-2 card-bg p-6 rounded-2xl">
+                    <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-800">
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-chart-pie text-sky-400"></i> Totales por categoría
+                        </h3>
+                        <span id="badgeGastoMensualCategoriaMes" class="text-xs font-semibold bg-slate-800 text-sky-400 px-3 py-0.5 rounded-full border border-slate-700">Cargando...</span>
+                    </div>
+                    <div id="containerGastoMensualCatTotales" class="space-y-3 max-h-[340px] overflow-y-auto pr-1"></div>
+                </div>
+            </div>
+
+            <div class="card-bg rounded-2xl overflow-hidden shadow-xl">
+                <div class="px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div class="flex items-center gap-3">
+                        <h3 class="text-base font-bold text-white">Detalle de gastos del mes</h3>
+                        <span id="badgeGastoMensualMes" class="text-xs font-semibold bg-slate-800 text-sky-400 px-3 py-0.5 rounded-full border border-slate-700">Cargando...</span>
+                    </div>
+                    <label class="flex items-center gap-2 text-xs font-semibold text-slate-400">
+                        Categoría
+                        <select id="filtroGastoMensualCategoria" onchange="filtrarGastosMensuales(this.value)" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-white">
+                            <option value="">Todas</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="max-h-[480px] overflow-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="table-header text-[11px] font-bold text-slate-400 uppercase tracking-wider sticky top-0 z-10">
+                                <th onclick="sortGastosMensuales('fecha')" class="px-5 py-3.5 bg-slate-900 cursor-pointer hover:text-white">Fecha</th>
+                                <th onclick="sortGastosMensuales('concepto')" class="px-5 py-3.5 bg-slate-900 cursor-pointer hover:text-white">Descripción</th>
+                                <th onclick="sortGastosMensuales('categoria')" class="px-5 py-3.5 bg-slate-900 cursor-pointer hover:text-white">Categoría</th>
+                                <th class="px-5 py-3.5 bg-slate-900">Medio de pago</th>
+                                <th onclick="sortGastosMensuales('monto')" class="px-5 py-3.5 text-right bg-slate-900 cursor-pointer hover:text-white">Monto</th>
+                                <th class="px-5 py-3.5 text-right bg-slate-900">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaGastoMensualCuerpo" class="divide-y divide-slate-800/60 text-sm font-medium"></tbody>
+                    </table>
+                </div>
+            </div>
         </section>
 
         <!-- ==================== SECCIÓN 4: GASTOS HORMIGA ==================== -->
@@ -716,6 +833,24 @@ select option {
         </div>
     </div>
 
+    <!-- MODAL CATEGORÍAS GASTO MENSUAL -->
+    <div id="modalCategoriasGastoMensual" class="fixed inset-0 bg-slate-950/80 hidden flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+        <div class="card-bg rounded-2xl shadow-2xl max-w-lg w-full p-6 text-white border border-slate-700 relative flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold flex items-center gap-2 text-sky-400"><i class="fa-solid fa-tags"></i> Categorías de Gasto Mensual</h3>
+                <button type="button" onclick="closeModal('modalCategoriasGastoMensual')" class="text-slate-400 hover:text-white text-lg" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="formNuevaCategoriaGastoMensual" class="space-y-3 mb-4 bg-slate-900 p-3 rounded-xl border border-slate-800">
+                <div class="flex items-center gap-2">
+                    <input type="text" id="nuevaCategoriaGastoMensualNombre" maxlength="40" required placeholder="Nueva categoría..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white">
+                    <input type="color" id="nuevaCategoriaGastoMensualColor" value="#0ea5e9" class="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer p-1" aria-label="Color de categoría">
+                    <button type="submit" class="w-10 h-10 bg-sky-600 hover:bg-sky-500 text-white rounded-xl flex items-center justify-center" aria-label="Agregar categoría"><i class="fa-solid fa-plus"></i></button>
+                </div>
+            </form>
+            <div id="listaCategoriasGastoMensual" class="space-y-2.5 max-h-64 overflow-y-auto pr-1"></div>
+        </div>
+    </div>
+
     <!-- MODAL GRÁFICO EXPANDIDO -->
     <div id="modalGraficoExpandido" class="fixed inset-0 bg-slate-950/90 hidden flex items-center justify-center p-4 sm:p-6 z-50 backdrop-blur-md transition-all">
         <div class="card-bg rounded-2xl shadow-2xl w-full max-w-5xl p-6 text-white border border-slate-700 relative flex flex-col h-[85vh]">
@@ -864,11 +999,13 @@ select option {
             document.getElementById('viewPlanilla').classList.add('hidden');
             document.getElementById('viewAnalisis').classList.add('hidden');
             document.getElementById('viewSaldos').classList.add('hidden');
+            document.getElementById('viewMensual').classList.add('hidden');
             document.getElementById('viewHormiga').classList.add('hidden');
 
             document.getElementById('btnTabPlanilla').className = "px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-white flex items-center gap-2 cursor-pointer";
             document.getElementById('btnTabAnalisis').className = "px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-white flex items-center gap-2 cursor-pointer";
             document.getElementById('btnTabSaldos').className = "px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-white flex items-center gap-2 cursor-pointer";
+            document.getElementById('btnTabMensual').className = "px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-white flex items-center gap-2 cursor-pointer";
             document.getElementById('btnTabHormiga').className = "px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-white flex items-center gap-2 cursor-pointer";
 
             if (tabName === 'planilla') {
@@ -886,6 +1023,10 @@ select option {
                 document.getElementById('viewSaldos').classList.remove('hidden');
                 document.getElementById('btnTabSaldos').className = "px-5 py-2.5 text-sm font-semibold tab-btn-active flex items-center gap-2 cursor-pointer";
                 renderSaldosApp();
+            } else if (tabName === 'mensual') {
+                document.getElementById('viewMensual').classList.remove('hidden');
+                document.getElementById('btnTabMensual').className = "px-5 py-2.5 text-sm font-semibold tab-btn-active flex items-center gap-2 cursor-pointer";
+                renderGastoMensualApp();
             } else if (tabName === 'hormiga') {
                 document.getElementById('viewHormiga').classList.remove('hidden');
                 document.getElementById('btnTabHormiga').className = "px-5 py-2.5 text-sm font-semibold tab-btn-active flex items-center gap-2 cursor-pointer";
@@ -901,6 +1042,7 @@ select option {
             if (currentActiveTab === 'planilla') renderPlanillaTab();
             else if (currentActiveTab === 'analisis') renderCharts();
             else if (currentActiveTab === 'saldos') renderSaldosApp();
+            else if (currentActiveTab === 'mensual') renderGastoMensualApp();
             else if (currentActiveTab === 'hormiga') renderHormigaApp();
         }
 
@@ -1944,9 +2086,412 @@ window.ejecutarEliminacionGasto = function() {
         const categoriasHormigaDefault = [ { nombre: "Kiosco", color: "#f59e0b" }, { nombre: "Panadería", color: "#d97706" }, { nombre: "Ferretería", color: "#78716c" }, { nombre: "Cafetería", color: "#b45309" }, { nombre: "Supermercado Rápido", color: "#10b981" }, { nombre: "Transporte / Peaje", color: "#3b82f6" }, { nombre: "Propinas", color: "#ec4899" }, { nombre: "Varios", color: "#64748b" } ];
         let chartInstHormigaCat = null; let chartInstHormigaEvol = null; let chartInstHormigaEvolCat = null;
 
+        function obtenerFechaLocalParaInput(fecha = new Date()) {
+            const año = fecha.getFullYear();
+            const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+            const dia = String(fecha.getDate()).padStart(2, '0');
+            return `${año}-${mes}-${dia}`;
+        }
+
+        const categoriasGastoMensual = [
+            { nombre: 'Alimentación', color: '#10b981' },
+            { nombre: 'Hogar', color: '#8b5cf6' },
+            { nombre: 'Transporte', color: '#3b82f6' },
+            { nombre: 'Salud', color: '#ef4444' },
+            { nombre: 'Educación', color: '#06b6d4' },
+            { nombre: 'Ocio', color: '#f59e0b' },
+            { nombre: 'Otros', color: '#64748b' }
+        ];
+        let ordenGastosMensuales = { columna: 'fecha', ascendente: false };
+        let filtroCategoriaGastoMensual = '';
+
+        function obtenerCategoriasGastoMensual() {
+            if (!Array.isArray(window.appState.categoriasGastosMensuales)) {
+                window.appState.categoriasGastosMensuales = categoriasGastoMensual.map(categoria => ({ ...categoria }));
+            }
+            return window.appState.categoriasGastosMensuales;
+        }
+
+        function renderSelectoresCategoriaGastoMensual() {
+            const categorias = obtenerCategoriasGastoMensual();
+            const selectorCategoria = document.getElementById('gastoMensualCategoria');
+            const selectorFiltro = document.getElementById('filtroGastoMensualCategoria');
+            const categoriaSeleccionada = selectorCategoria.value;
+            const filtroSeleccionado = filtroCategoriaGastoMensual;
+            const categoriasHistoricas = (window.appState.gastosMensuales || []).map(gasto => gasto.categoria).filter(Boolean);
+            const opcionesFiltro = [...new Set([...categorias.map(categoria => categoria.nombre), ...categoriasHistoricas])];
+
+            selectorCategoria.replaceChildren();
+            categorias.forEach(categoria => {
+                const opcion = document.createElement('option');
+                opcion.value = categoria.nombre;
+                opcion.textContent = categoria.nombre;
+                selectorCategoria.appendChild(opcion);
+            });
+            if (categorias.some(categoria => categoria.nombre === categoriaSeleccionada)) {
+                selectorCategoria.value = categoriaSeleccionada;
+            }
+
+            selectorFiltro.replaceChildren();
+            const opcionTodas = document.createElement('option');
+            opcionTodas.value = '';
+            opcionTodas.textContent = 'Todas';
+            selectorFiltro.appendChild(opcionTodas);
+            opcionesFiltro.forEach(nombre => {
+                const opcion = document.createElement('option');
+                opcion.value = nombre;
+                opcion.textContent = nombre;
+                selectorFiltro.appendChild(opcion);
+            });
+            selectorFiltro.value = opcionesFiltro.includes(filtroSeleccionado) ? filtroSeleccionado : '';
+            if (!opcionesFiltro.includes(filtroSeleccionado)) filtroCategoriaGastoMensual = '';
+        }
+
+        function renderListaCategoriasGastoMensual() {
+            const container = document.getElementById('listaCategoriasGastoMensual');
+            container.replaceChildren();
+            obtenerCategoriasGastoMensual().forEach((categoria, index) => {
+                const fila = document.createElement('div');
+                fila.className = 'flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800';
+                const campos = document.createElement('div');
+                campos.className = 'flex items-center gap-2 flex-1';
+                const color = document.createElement('input');
+                color.type = 'color';
+                color.value = categoria.color || '#64748b';
+                color.className = 'w-8 h-8 rounded bg-slate-900 border border-slate-800 cursor-pointer p-0.5';
+                color.setAttribute('aria-label', `Color de ${categoria.nombre}`);
+                color.addEventListener('change', () => actualizarCategoriaGastoMensual(index, 'color', color.value));
+                const nombre = document.createElement('input');
+                nombre.type = 'text';
+                nombre.value = categoria.nombre;
+                nombre.maxLength = 40;
+                nombre.className = 'flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-sm font-bold text-white';
+                nombre.setAttribute('aria-label', 'Nombre de categoría');
+                nombre.addEventListener('change', () => actualizarCategoriaGastoMensual(index, 'nombre', nombre.value));
+                const eliminar = document.createElement('button');
+                eliminar.type = 'button';
+                eliminar.className = 'text-rose-400 hover:text-rose-300 p-2';
+                eliminar.title = 'Eliminar categoría';
+                eliminar.setAttribute('aria-label', `Eliminar categoría ${categoria.nombre}`);
+                eliminar.innerHTML = '<i class="fa-solid fa-trash-can text-xs"></i>';
+                eliminar.addEventListener('click', () => eliminarCategoriaGastoMensual(index));
+                campos.append(color, nombre);
+                fila.append(campos, eliminar);
+                container.appendChild(fila);
+            });
+        }
+
+        async function guardarCambiosCategoriasGastoMensual(categorias, gastos) {
+            try {
+                await window.guardarCategoriasGastoMensual(categorias, gastos);
+                window.appState.categoriasGastosMensuales = categorias;
+                window.appState.gastosMensuales = gastos;
+                renderListaCategoriasGastoMensual();
+                renderGastoMensualApp();
+            } catch (error) {
+                console.error('Error al guardar las categorías de gasto mensual:', error);
+                window.mostrarMensajeApp('No se pudieron guardar las categorías', 'Revisá tu conexión y tus permisos e intentá nuevamente.', 'error');
+            }
+        }
+
+        window.openModalCategoriasGastoMensual = function() {
+            if (!esEditorGastoMensual()) {
+                window.mostrarMensajeApp('Acceso restringido', 'Solo los usuarios con permiso de escritura pueden administrar categorías.', 'error');
+                return;
+            }
+            renderListaCategoriasGastoMensual();
+            document.getElementById('modalCategoriasGastoMensual').classList.remove('hidden');
+        };
+
+        window.agregarCategoriaGastoMensual = async function(event) {
+            event.preventDefault();
+            if (!esEditorGastoMensual()) {
+                window.mostrarMensajeApp('Acceso restringido', 'Solo los usuarios con permiso de escritura pueden administrar categorías.', 'error');
+                return;
+            }
+            const inputNombre = document.getElementById('nuevaCategoriaGastoMensualNombre');
+            const nombre = inputNombre.value.trim();
+            const categorias = obtenerCategoriasGastoMensual().map(categoria => ({ ...categoria }));
+            if (!nombre) return;
+            if (categorias.some(categoria => categoria.nombre.toLocaleLowerCase() === nombre.toLocaleLowerCase())) {
+                window.mostrarMensajeApp('Categoría existente', 'Ya hay una categoría con ese nombre.', 'error');
+                return;
+            }
+            categorias.push({ nombre, color: document.getElementById('nuevaCategoriaGastoMensualColor').value });
+            await guardarCambiosCategoriasGastoMensual(categorias, window.appState.gastosMensuales || []);
+            if (window.appState.categoriasGastosMensuales.some(categoria => categoria.nombre === nombre)) {
+                inputNombre.value = '';
+            }
+        };
+
+        window.actualizarCategoriaGastoMensual = async function(index, campo, valor) {
+            if (!esEditorGastoMensual()) {
+                window.mostrarMensajeApp('Acceso restringido', 'Solo los usuarios con permiso de escritura pueden administrar categorías.', 'error');
+                return;
+            }
+            const categorias = obtenerCategoriasGastoMensual().map(categoria => ({ ...categoria }));
+            const categoriaActual = categorias[index];
+            if (!categoriaActual) return;
+            const gastos = (window.appState.gastosMensuales || []).map(gasto => ({ ...gasto }));
+            if (campo === 'nombre') {
+                const nombre = valor.trim();
+                if (!nombre) {
+                    renderListaCategoriasGastoMensual();
+                    return;
+                }
+                if (categorias.some((categoria, categoriaIndex) => categoriaIndex !== index && categoria.nombre.toLocaleLowerCase() === nombre.toLocaleLowerCase())) {
+                    window.mostrarMensajeApp('Categoría existente', 'Ya hay una categoría con ese nombre.', 'error');
+                    renderListaCategoriasGastoMensual();
+                    return;
+                }
+                gastos.forEach(gasto => {
+                    if (gasto.categoria === categoriaActual.nombre) gasto.categoria = nombre;
+                });
+                categoriaActual.nombre = nombre;
+            } else if (campo === 'color') {
+                categoriaActual.color = valor;
+            } else {
+                return;
+            }
+            await guardarCambiosCategoriasGastoMensual(categorias, gastos);
+        };
+
+        window.eliminarCategoriaGastoMensual = async function(index) {
+            if (!esEditorGastoMensual()) {
+                window.mostrarMensajeApp('Acceso restringido', 'Solo los usuarios con permiso de escritura pueden administrar categorías.', 'error');
+                return;
+            }
+            const categorias = obtenerCategoriasGastoMensual().map(categoria => ({ ...categoria }));
+            if (categorias.length <= 1) {
+                window.mostrarMensajeApp('No se puede eliminar', 'Debe quedar al menos una categoría.', 'error');
+                return;
+            }
+            categorias.splice(index, 1);
+            await guardarCambiosCategoriasGastoMensual(categorias, window.appState.gastosMensuales || []);
+        };
+
+        document.getElementById('formNuevaCategoriaGastoMensual').addEventListener('submit', window.agregarCategoriaGastoMensual);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const fechaInput = document.getElementById('gastoMensualFecha');
+            if (fechaInput) fechaInput.value = obtenerFechaLocalParaInput();
+        });
+
+        function esEditorGastoMensual() {
+            return typeof window.esUsuarioEditor === 'function' && window.esUsuarioEditor();
+        }
+
+        window.filtrarGastosMensuales = function(categoria) {
+            filtroCategoriaGastoMensual = categoria;
+            renderGastoMensualApp();
+        };
+
+        window.sortGastosMensuales = function(columna) {
+            if (ordenGastosMensuales.columna === columna) {
+                ordenGastosMensuales.ascendente = !ordenGastosMensuales.ascendente;
+            } else {
+                ordenGastosMensuales = { columna, ascendente: columna !== 'fecha' };
+            }
+            renderGastoMensualApp();
+        };
+
+        window.renderGastoMensualApp = function() {
+            const mes = window.appState.currentMonth || '2026-10';
+            const mesTexto = window.formatMonthDisplay(mes);
+            const gastosMes = (Array.isArray(window.appState.gastosMensuales) ? window.appState.gastosMensuales : [])
+                .filter(gasto => gasto.fecha && gasto.fecha.slice(0, 7) === mes);
+            const editor = esEditorGastoMensual();
+            const formulario = document.getElementById('formGastoMensualContainer');
+            const tituloFormulario = document.getElementById('tituloFormGastoMensual');
+            const formularioCampos = document.getElementById('formGastoMensual');
+            const mensajeLectura = document.getElementById('gastoMensualSoloLectura');
+            if (formulario) formulario.classList.remove('hidden');
+            if (tituloFormulario) tituloFormulario.classList.toggle('hidden', !editor);
+            if (formularioCampos) formularioCampos.classList.toggle('hidden', !editor);
+            if (mensajeLectura) mensajeLectura.classList.toggle('hidden', editor);
+            document.getElementById('btnCategoriasGastoMensual').classList.toggle('hidden', !editor);
+            renderSelectoresCategoriaGastoMensual();
+
+            document.getElementById('badgeGastoMensualMes').textContent = mesTexto;
+            document.getElementById('badgeGastoMensualCategoriaMes').textContent = mesTexto;
+            const total = gastosMes.reduce((suma, gasto) => suma + (Number(gasto.monto) || 0), 0);
+            const hoy = new Date();
+            const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+            const [año, numeroMes] = mes.split('-').map(Number);
+            const diasMes = new Date(año, numeroMes, 0).getDate();
+            const diasContabilizados = mes < mesActual ? diasMes : mes === mesActual ? hoy.getDate() : 0;
+            const promedio = diasContabilizados > 0 ? total / diasContabilizados : 0;
+            const formatoMoneda = monto => '$ ' + monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('cardGastoMensualTotal').textContent = formatoMoneda(total);
+            document.getElementById('cardGastoMensualPromedio').textContent = formatoMoneda(promedio);
+            document.getElementById('cardGastoMensualCantidad').textContent = `${gastosMes.length} gasto${gastosMes.length === 1 ? '' : 's'}`;
+
+            const totalesPorCategoria = new Map();
+            gastosMes.forEach(gasto => {
+                totalesPorCategoria.set(gasto.categoria, (totalesPorCategoria.get(gasto.categoria) || 0) + (Number(gasto.monto) || 0));
+            });
+            const resumen = document.getElementById('containerGastoMensualCatTotales');
+            resumen.replaceChildren();
+            const categoriasConGastos = [...totalesPorCategoria.entries()].sort((a, b) => b[1] - a[1]);
+            if (categoriasConGastos.length === 0) {
+                const vacio = document.createElement('p');
+                vacio.className = 'text-xs text-slate-500 italic text-center py-6';
+                vacio.textContent = 'No hay gastos registrados en este mes.';
+                resumen.appendChild(vacio);
+            } else {
+                categoriasConGastos.forEach(([nombre, monto]) => {
+                    const categoria = categoriasGastoMensual.find(item => item.nombre === nombre);
+                    const porcentaje = total > 0 ? (monto / total) * 100 : 0;
+                    const fila = document.createElement('div');
+                    fila.className = 'p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1.5';
+                    const cabecera = document.createElement('div');
+                    cabecera.className = 'flex justify-between items-center text-xs';
+                    const etiqueta = document.createElement('span');
+                    etiqueta.className = 'font-bold text-white flex items-center gap-2';
+                    const punto = document.createElement('span');
+                    punto.className = 'w-2.5 h-2.5 rounded-full';
+                    punto.style.backgroundColor = categoria ? categoria.color : '#64748b';
+                    const nombreCategoria = document.createElement('span');
+                    nombreCategoria.textContent = nombre || 'Sin categoría';
+                    etiqueta.append(punto, nombreCategoria);
+                    const montoCategoria = document.createElement('span');
+                    montoCategoria.className = 'font-extrabold text-sky-400';
+                    montoCategoria.textContent = `${formatoMoneda(monto)} (${porcentaje.toFixed(1)}%)`;
+                    cabecera.append(etiqueta, montoCategoria);
+                    const barra = document.createElement('div');
+                    barra.className = 'w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800/80';
+                    const progreso = document.createElement('div');
+                    progreso.className = 'h-full rounded-full';
+                    progreso.style.width = `${porcentaje}%`;
+                    progreso.style.backgroundColor = categoria ? categoria.color : '#64748b';
+                    barra.appendChild(progreso);
+                    fila.append(cabecera, barra);
+                    resumen.appendChild(fila);
+                });
+            }
+
+            const selectorFiltro = document.getElementById('filtroGastoMensualCategoria');
+            if (selectorFiltro) selectorFiltro.value = filtroCategoriaGastoMensual;
+            const gastosFiltrados = gastosMes
+                .filter(gasto => !filtroCategoriaGastoMensual || gasto.categoria === filtroCategoriaGastoMensual)
+                .sort((a, b) => {
+                    const valorA = ordenGastosMensuales.columna === 'monto' ? Number(a.monto) || 0 : a[ordenGastosMensuales.columna] || '';
+                    const valorB = ordenGastosMensuales.columna === 'monto' ? Number(b.monto) || 0 : b[ordenGastosMensuales.columna] || '';
+                    if (valorA < valorB) return ordenGastosMensuales.ascendente ? -1 : 1;
+                    if (valorA > valorB) return ordenGastosMensuales.ascendente ? 1 : -1;
+                    return 0;
+                });
+
+            const tabla = document.getElementById('tablaGastoMensualCuerpo');
+            tabla.replaceChildren();
+            if (gastosFiltrados.length === 0) {
+                const fila = document.createElement('tr');
+                const celda = document.createElement('td');
+                celda.colSpan = 6;
+                celda.className = 'px-6 py-8 text-center text-slate-500';
+                celda.textContent = 'No hay gastos mensuales que coincidan.';
+                fila.appendChild(celda);
+                tabla.appendChild(fila);
+                return;
+            }
+
+            gastosFiltrados.forEach(gasto => {
+                const fila = document.createElement('tr');
+                fila.className = 'hover:bg-slate-900/40 transition-colors';
+                const fecha = document.createElement('td');
+                fecha.className = 'px-5 py-3.5 text-slate-400 text-xs';
+                fecha.textContent = gasto.fecha ? gasto.fecha.split('-').reverse().join('/') : '';
+                const concepto = document.createElement('td');
+                concepto.className = 'px-5 py-3.5 text-white font-bold';
+                concepto.textContent = gasto.concepto || '';
+                const categoria = document.createElement('td');
+                categoria.className = 'px-5 py-3.5 text-slate-300';
+                categoria.textContent = gasto.categoria || 'Sin categoría';
+                const medioPago = document.createElement('td');
+                medioPago.className = 'px-5 py-3.5 text-slate-400 text-xs';
+                medioPago.textContent = gasto.medioPago || 'Efectivo';
+                const monto = document.createElement('td');
+                monto.className = 'px-5 py-3.5 text-right font-extrabold text-sky-400';
+                monto.textContent = formatoMoneda(Number(gasto.monto) || 0);
+                const acciones = document.createElement('td');
+                acciones.className = 'px-5 py-3.5 text-right';
+                if (editor) {
+                    const botonEliminar = document.createElement('button');
+                    botonEliminar.type = 'button';
+                    botonEliminar.className = 'text-slate-400 hover:text-rose-400';
+                    botonEliminar.title = 'Eliminar';
+                    botonEliminar.setAttribute('aria-label', `Eliminar ${gasto.concepto || 'gasto'}`);
+                    botonEliminar.innerHTML = '<i class="fa-solid fa-trash-can text-xs"></i>';
+                    botonEliminar.addEventListener('click', () => window.deleteGastoMensual(gasto.id));
+                    acciones.appendChild(botonEliminar);
+                }
+                fila.append(fecha, concepto, categoria, medioPago, monto, acciones);
+                tabla.appendChild(fila);
+            });
+        };
+
+        window.handleSaveGastoMensual = async function(event) {
+            event.preventDefault();
+            if (!esEditorGastoMensual()) {
+                window.mostrarMensajeApp('Acceso restringido', 'Tu permiso en este grupo es de solo lectura.', 'error');
+                return;
+            }
+
+            const concepto = document.getElementById('gastoMensualConcepto').value.trim();
+            const monto = Number(document.getElementById('gastoMensualMonto').value);
+            const fecha = document.getElementById('gastoMensualFecha').value;
+            if (!concepto || !Number.isFinite(monto) || monto <= 0 || !fecha) {
+                window.mostrarMensajeApp('Datos incompletos', 'Ingresá una descripción, un monto mayor a cero y una fecha válida.', 'error');
+                return;
+            }
+
+            const nuevoGasto = {
+                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                concepto,
+                monto,
+                fecha,
+                categoria: document.getElementById('gastoMensualCategoria').value,
+                medioPago: document.getElementById('gastoMensualMedioPago').value
+            };
+            try {
+                await window.agregarGastoMensualCompartido(nuevoGasto);
+            } catch (error) {
+                console.error('Error al guardar el gasto mensual compartido:', error);
+                window.mostrarMensajeApp('No se pudo guardar', 'El gasto no se guardó en Firestore. Revisá tu conexión y tus permisos.', 'error');
+                return;
+            }
+            if (!Array.isArray(window.appState.gastosMensuales)) window.appState.gastosMensuales = [];
+            if (!window.appState.gastosMensuales.some(gasto => gasto.id === nuevoGasto.id)) {
+                window.appState.gastosMensuales.push(nuevoGasto);
+            }
+            document.getElementById('gastoMensualConcepto').value = '';
+            document.getElementById('gastoMensualMonto').value = '';
+            document.getElementById('gastoMensualFecha').value = obtenerFechaLocalParaInput();
+            renderGastoMensualApp();
+        };
+
+        window.deleteGastoMensual = async function(id) {
+            if (!esEditorGastoMensual()) {
+                window.mostrarMensajeApp('Acceso restringido', 'Tu permiso en este grupo es de solo lectura.', 'error');
+                return;
+            }
+            if (!window.confirm('¿Eliminar este gasto mensual compartido?')) return;
+            const gastoAEliminar = (window.appState.gastosMensuales || []).find(gasto => gasto.id === id);
+            if (!gastoAEliminar) return;
+            try {
+                await window.eliminarGastoMensualCompartido(gastoAEliminar);
+            } catch (error) {
+                console.error('Error al eliminar el gasto mensual compartido:', error);
+                window.mostrarMensajeApp('No se pudo eliminar', 'El gasto sigue guardado. Revisá tu conexión y tus permisos.', 'error');
+                return;
+            }
+            window.appState.gastosMensuales = (window.appState.gastosMensuales || []).filter(gasto => gasto.id !== id);
+            renderGastoMensualApp();
+        };
+
         document.addEventListener('DOMContentLoaded', () => {
             const fechaInput = document.getElementById('hormigaFecha');
-            if (fechaInput) fechaInput.value = new Date().toISOString().slice(0, 10);
+            if (fechaInput) fechaInput.value = obtenerFechaLocalParaInput();
         });
 
         window.sortHormigaData = function(column) {
@@ -1972,7 +2517,11 @@ window.ejecutarEliminacionGasto = function() {
             const catHormigaList = window.hormigaState.categorias || categoriasHormigaDefault;
             let totalHormiga = 0; itemsHormiga.forEach(g => totalHormiga += parseFloat(g.monto) || 0);
             const [year, month] = currentMonth.split('-').map(Number);
-            const diasEnMes = new Date(year, month, 0).getDate(); const promedioDiario = totalHormiga / diasEnMes;
+            const diasEnMes = new Date(year, month, 0).getDate();
+            const hoy = new Date();
+            const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+            const diasTranscurridos = currentMonth < mesActual ? diasEnMes : currentMonth === mesActual ? hoy.getDate() : 0;
+            const promedioDiario = diasTranscurridos > 0 ? totalHormiga / diasTranscurridos : 0;
             const fmt = num => "$ " + num.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
             document.getElementById('cardHormigaTotal').innerText = fmt(totalHormiga);
