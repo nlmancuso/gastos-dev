@@ -1090,7 +1090,7 @@ function triggerPageRenders() {
     }
 
     const currentMonth = window.appState.currentMonth;
-    const monthHeader = document.getElementById('monthDisplay');
+    const monthHeader = document.getElementById('displayMonthText');
     if (monthHeader) {
         monthHeader.innerText = window.formatMonthDisplay ? window.formatMonthDisplay(currentMonth) : currentMonth;
     }
