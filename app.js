@@ -22,6 +22,51 @@ let unsubscribeSnapshot = null;
 let unsubscribeHormiga = null;
 let unsubscribeInvitaciones = null;
 
+// ==========================================
+// EXPORTACIÓN DE FUNCIONES AUXILIARES GLOBALES
+// ==========================================
+
+window.switchTab = function(tabId) {
+    const tabs = ['Planilla', 'Graficos', 'Saldos', 'Hormiga'];
+    tabs.forEach(t => {
+        const el = document.getElementById(`tab${t}`);
+        const btn = document.getElementById(`btnTab${t}`);
+        if (el) el.classList.add('hidden');
+        if (btn) btn.className = "px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors border-b-2 border-transparent";
+    });
+
+    const activeEl = document.getElementById(`tab${tabId}`);
+    const activeBtn = document.getElementById(`btnTab${tabId}`);
+    if (activeEl) activeEl.classList.remove('hidden');
+    if (activeBtn) activeBtn.className = "px-4 py-2 text-xs font-bold text-emerald-400 border-b-2 border-emerald-400 transition-colors";
+};
+
+window.openModalGasto = function(gastoId = null) {
+    const modal = document.getElementById('modalGasto');
+    if (modal) modal.classList.remove('hidden');
+};
+
+window.closeModal = function(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.add('hidden');
+};
+
+window.toggleCategoriaAcordeon = function(catNombre) {
+    window.categoriasAbiertasMap[catNombre] = !window.categoriasAbiertasMap[catNombre];
+    triggerPageRenders();
+};
+
+window.forzarVerificacionEmail = async function(emailObjetivo = "sosaleonela2024@gmail.com") {
+    try {
+        const uidLeonela = "Ax3bwHzylYbXjCOGy5Y85e0Iu8R2";
+        await setDoc(doc(db, "app_data", `personal_${uidLeonela}`), { emailVerificado: true }, { merge: true });
+        window.mostrarNotificacion("¡Éxito!", `La cuenta ${emailObjetivo} fue verificada correctamente.`, "exito");
+    } catch (e) {
+        console.error("Error al forzar verificación:", e);
+        window.mostrarNotificacion("Error", "No se pudo actualizar el estado de verificación.", "error");
+    }
+};
+
 // Helpers globales para Modales Estéticos
 window.mostrarNotificacion = function(titulo, mensaje, tipo = 'info', callback = null) {
     const modal = document.getElementById('modalNotificacion');
@@ -119,7 +164,7 @@ window.esUsuarioEditor = function() {
 };
 
 // ==========================================
-// FUNCIONES DE ACTUALIZACIÓN DE MONTO PAGADO
+// FUNCIONES DE ACTUALIZACIÓN DE MONTO PAGADO Y VENCIMIENTOS
 // ==========================================
 
 window.actualizarMontoPagado = function(gastoId, monthStr, valor) {
@@ -131,7 +176,7 @@ window.actualizarMontoPagado = function(gastoId, monthStr, valor) {
     const key = `${gastoId}_${monthStr}`;
     window.appState.excepcionesMontoPagado[key] = parseFloat(valor) || 0;
     window.saveDataToCloud();
-    renderApp();
+    triggerPageRenders();
 };
 
 window.actualizarMontoPagadoCategoria = function(categoria, monthStr, valor) {
@@ -143,7 +188,7 @@ window.actualizarMontoPagadoCategoria = function(categoria, monthStr, valor) {
     const key = `${categoria}_${monthStr}`;
     window.appState.excepcionesMontoPagadoCategoria[key] = parseFloat(valor) || 0;
     window.saveDataToCloud();
-    renderApp();
+    triggerPageRenders();
 };
 
 window.actualizarVencimientoGrid = function(gastoId, monthStr, nuevaFecha, categoria) {
@@ -168,7 +213,7 @@ window.actualizarVencimientoGrid = function(gastoId, monthStr, nuevaFecha, categ
     }
 
     window.saveDataToCloud();
-    renderApp();
+    triggerPageRenders();
 };
 
 // ==========================================
@@ -232,14 +277,6 @@ function aplicarRestriccionesInterfaz() {
         });
     }
 }
-
-const originalRenderApp = window.renderApp || function(){};
-window.renderApp = function() {
-    if (typeof originalRenderApp === 'function') {
-        originalRenderApp();
-    }
-    setTimeout(aplicarRestriccionesInterfaz, 100);
-};
 
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(aplicarRestriccionesInterfaz, 500);
@@ -323,8 +360,8 @@ window.cambiarRolMiembro = async function(uidMiembro, nuevoRol) {
 
             if (typeof window.renderModalGrupo === 'function') {
                 window.renderModalGrupo();
-            } else if (typeof window.renderApp === 'function') {
-                window.renderApp();
+            } else {
+                triggerPageRenders();
             }
         }
     } catch (error) {
@@ -1031,11 +1068,40 @@ function actualizarVisibilidadBotonesAdmin() {
 
 function triggerPageRenders() {
     actualizarVisibilidadBotonesAdmin();
-    if (typeof renderApp === 'function') renderApp();
+    
+    // Renderizado principal de la vista activa
+    const currentMonth = window.appState.currentMonth || defaultLocalMonth;
+    const monthHeader = document.getElementById('monthDisplay');
+    if (monthHeader) monthHeader.innerText = window.formatMonthDisplay(currentMonth);
+
+    const calculatedData = window.getCalculatedDataForMonth(currentMonth);
+    
+    // Actualizar Tarjetas Resumen
+    const elSueldo = document.getElementById('sueldoDisplay');
+    const elTotalFijos = document.getElementById('totalFijosDisplay');
+    const elTotalTarjetas = document.getElementById('totalTarjetasDisplay');
+    const elGastosTotales = document.getElementById('gastosTotalesDisplay');
+    const elResto = document.getElementById('restoDisplay');
+
+    const fmt = num => "$ " + num.toLocaleString('es-AR', { minimumFractionDigits: 2 });
+    const totalGeneral = calculatedData.totalFijos + calculatedData.totalTarjetas;
+    const resto = calculatedData.sueldoActual - totalGeneral;
+
+    if (elSueldo) elSueldo.innerText = fmt(calculatedData.sueldoActual);
+    if (elTotalFijos) elTotalFijos.innerText = fmt(calculatedData.totalFijos);
+    if (elTotalTarjetas) elTotalTarjetas.innerText = fmt(calculatedData.totalTarjetas);
+    if (elGastosTotales) elGastosTotales.innerText = fmt(totalGeneral);
+    if (elResto) elResto.innerText = fmt(resto);
+
+    // Renderizar Planilla Agrupada
+    window.renderPlanillaAgrupadaTabla(calculatedData.items);
+
     if (typeof renderCharts === 'function') renderCharts();
     if (typeof renderSaldosApp === 'function') renderSaldosApp();
     if (typeof renderHormigaApp === 'function') renderHormigaApp();
 }
+
+window.renderApp = triggerPageRenders;
 
 window.navigateMonth = function(direction) {
     let [year, month] = (window.appState.currentMonth || defaultLocalMonth).split('-').map(Number);
@@ -1547,7 +1613,7 @@ window.actualizarEstadoGasto = function(gastoId, monthStr, nuevoEstado) {
     }
 
     window.saveDataToCloud(); 
-    renderApp();
+    triggerPageRenders();
 };
 
 window.actualizarEstadoGastoMasivo = function(gastoId, nuevoEstado) {
@@ -1581,7 +1647,7 @@ window.actualizarEstadoGastoMasivo = function(gastoId, nuevoEstado) {
     }
 
     window.saveDataToCloud();
-    renderApp();
+    triggerPageRenders();
 };
 
 // ==========================================
