@@ -464,6 +464,43 @@ select option {
                 </div>
             </div>
 
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                <div class="card-bg p-6 rounded-2xl space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-bold text-slate-300 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-pie text-sky-400"></i> Gastos Mensuales por Categoría (Gráfico)
+                        </h3>
+                        <button onclick="expandirGraficoModal('chartGastoMensualCategorias', 'Gastos Mensuales por Categoría')" class="text-slate-400 hover:text-sky-400 p-1.5 bg-slate-900 rounded-lg border border-slate-800 transition" title="Ver en grande">
+                            <i class="fa-solid fa-expand text-xs"></i>
+                        </button>
+                    </div>
+                    <div class="relative h-64 w-full flex items-center justify-center"><canvas id="chartGastoMensualCategorias"></canvas></div>
+                </div>
+                <div class="card-bg p-6 rounded-2xl space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-bold text-slate-300 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-column text-sky-400"></i> Evolución Gasto Mensual (Últimos 6 Meses)
+                        </h3>
+                        <button onclick="expandirGraficoModal('chartGastoMensualEvolucion', 'Evolución Gasto Mensual')" class="text-slate-400 hover:text-sky-400 p-1.5 bg-slate-900 rounded-lg border border-slate-800 transition" title="Ver en grande">
+                            <i class="fa-solid fa-expand text-xs"></i>
+                        </button>
+                    </div>
+                    <div class="relative h-64 w-full"><canvas id="chartGastoMensualEvolucion"></canvas></div>
+                </div>
+            </div>
+
+            <div class="card-bg p-6 rounded-2xl space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-slate-300 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-line text-sky-400"></i> Evolución por Categoría (Últimos 6 Meses)
+                    </h3>
+                    <button onclick="expandirGraficoModal('chartGastoMensualEvolucionCategorias', 'Evolución por Categoría')" class="text-slate-400 hover:text-sky-400 p-1.5 bg-slate-900 rounded-lg border border-slate-800 transition" title="Ver en grande">
+                        <i class="fa-solid fa-expand text-xs"></i>
+                    </button>
+                </div>
+                <div class="relative h-72 w-full"><canvas id="chartGastoMensualEvolucionCategorias"></canvas></div>
+            </div>
+
             <div class="card-bg p-6 rounded-2xl space-y-4">
                 <div class="flex items-center justify-between">
                     <h3 class="text-sm font-bold text-slate-300 flex items-center gap-2">
@@ -861,6 +898,26 @@ select option {
                 </div>
             </form>
             <div id="listaCategoriasGastoMensual" class="space-y-2.5 max-h-64 overflow-y-auto pr-1"></div>
+        </div>
+    </div>
+
+    <!-- CONFIRMACIÓN DE ELIMINACIÓN DE GASTO MENSUAL -->
+    <div id="modalConfirmarGastoMensual" class="fixed inset-0 bg-slate-950/80 hidden flex items-center justify-center p-4 z-[60] backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modalConfirmarGastoMensualTitulo">
+        <div class="card-bg rounded-2xl shadow-2xl max-w-sm w-full p-6 text-white border border-slate-700">
+            <div class="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                <i class="fa-solid fa-trash-can text-lg"></i>
+            </div>
+            <h3 id="modalConfirmarGastoMensualTitulo" class="text-lg font-bold text-center">Eliminar gasto mensual</h3>
+            <p class="mt-2 text-sm text-slate-300 text-center">
+                ¿Querés eliminar <strong id="nombreGastoMensualAEliminar" class="text-white"></strong> del registro compartido?
+            </p>
+            <p id="errorEliminarGastoMensual" class="hidden mt-4 p-3 bg-rose-950/50 border border-rose-800/60 rounded-xl text-rose-300 text-xs"></p>
+            <div class="flex justify-end gap-2 mt-6">
+                <button type="button" onclick="cerrarConfirmacionGastoMensual()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-700">Cancelar</button>
+                <button id="btnConfirmarEliminarGastoMensual" type="button" onclick="confirmarEliminacionGastoMensual()" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs shadow-lg">
+                    Sí, eliminar
+                </button>
+            </div>
         </div>
     </div>
 
@@ -2117,7 +2174,11 @@ window.ejecutarEliminacionGasto = function() {
         ];
         let ordenGastosMensuales = { columna: 'fecha', ascendente: false };
         let filtroCategoriaGastoMensual = '';
+        let chartGastoMensualCategorias = null;
+        let chartGastoMensualEvolucion = null;
+        let chartGastoMensualEvolucionCategorias = null;
         let chartGastoMensualUsuarios = null;
+        let gastoMensualPendienteDeEliminar = null;
 
         function obtenerCategoriasGastoMensual() {
             if (!Array.isArray(window.appState.categoriasGastosMensuales)) {
@@ -2352,7 +2413,7 @@ window.ejecutarEliminacionGasto = function() {
                 resumen.appendChild(vacio);
             } else {
                 categoriasConGastos.forEach(([nombre, monto]) => {
-                    const categoria = categoriasGastoMensual.find(item => item.nombre === nombre);
+                    const categoria = obtenerCategoriasGastoMensual().find(item => item.nombre === nombre);
                     const porcentaje = total > 0 ? (monto / total) * 100 : 0;
                     const fila = document.createElement('div');
                     fila.className = 'p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1.5';
@@ -2393,7 +2454,7 @@ window.ejecutarEliminacionGasto = function() {
                     if (valorA > valorB) return ordenGastosMensuales.ascendente ? 1 : -1;
                     return 0;
                 });
-            renderGraficoGastoMensualPorUsuario();
+            renderGraficosGastoMensual();
 
             const tabla = document.getElementById('tablaGastoMensualCuerpo');
             tabla.replaceChildren();
@@ -2425,7 +2486,9 @@ window.ejecutarEliminacionGasto = function() {
                 medioPago.textContent = gasto.medioPago || 'Efectivo';
                 const usuario = document.createElement('td');
                 usuario.className = 'px-5 py-3.5 text-slate-400 text-xs';
-                usuario.textContent = gasto.usuarioEmail || (gasto.usuarioUid ? `Usuario ${gasto.usuarioUid.slice(0, 8)}` : 'Sin identificar');
+                usuario.textContent = gasto.usuarioEmail
+                    ? gasto.usuarioEmail.split('@')[0]
+                    : (gasto.usuarioUid ? `Usuario ${gasto.usuarioUid.slice(0, 8)}` : 'Sin identificar');
                 const monto = document.createElement('td');
                 monto.className = 'px-5 py-3.5 text-right font-extrabold text-sky-400';
                 monto.textContent = formatoMoneda(Number(gasto.monto) || 0);
@@ -2446,23 +2509,142 @@ window.ejecutarEliminacionGasto = function() {
             });
         };
 
-        function renderGraficoGastoMensualPorUsuario() {
-            const canvas = document.getElementById('chartGastoMensualUsuarios');
-            if (!canvas || typeof Chart === 'undefined') return;
-
+        function renderGraficosGastoMensual() {
+            if (typeof Chart === 'undefined') return;
+            const gastos = Array.isArray(window.appState.gastosMensuales) ? window.appState.gastosMensuales : [];
             const mesActual = window.appState.currentMonth || '2026-10';
             const [añoActual, numeroMesActual] = mesActual.split('-').map(Number);
             const meses = [];
             for (let desplazamiento = 5; desplazamiento >= 0; desplazamiento--) {
                 const fecha = new Date(añoActual, numeroMesActual - 1 - desplazamiento, 1);
                 const clave = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
-                meses.push({
-                    clave,
-                    etiqueta: window.formatMonthDisplay(clave)
+                meses.push({ clave, etiqueta: window.formatMonthDisplay(clave) });
+            }
+
+            const categoriasConfiguradas = obtenerCategoriasGastoMensual();
+            const nombresCategorias = [...new Set([
+                ...categoriasConfiguradas.map(categoria => categoria.nombre),
+                ...gastos.map(gasto => gasto.categoria).filter(Boolean)
+            ])];
+            const coloresPredeterminados = ['#10b981', '#8b5cf6', '#3b82f6', '#ef4444', '#06b6d4', '#f59e0b', '#64748b', '#ec4899', '#84cc16', '#fb923c'];
+            const colorCategoria = nombre => {
+                const indice = categoriasConfiguradas.findIndex(categoria => categoria.nombre === nombre);
+                return indice >= 0
+                    ? categoriasConfiguradas[indice].color
+                    : coloresPredeterminados[(nombresCategorias.indexOf(nombre) + categoriasConfiguradas.length) % coloresPredeterminados.length];
+            };
+            const gastosMesActual = gastos.filter(gasto => gasto.fecha && gasto.fecha.slice(0, 7) === mesActual);
+            const totalesMesPorCategoria = new Map();
+            gastosMesActual.forEach(gasto => {
+                if (!gasto.categoria) return;
+                totalesMesPorCategoria.set(gasto.categoria, (totalesMesPorCategoria.get(gasto.categoria) || 0) + (Number(gasto.monto) || 0));
+            });
+
+            const canvasCategorias = document.getElementById('chartGastoMensualCategorias');
+            if (canvasCategorias) {
+                if (chartGastoMensualCategorias) chartGastoMensualCategorias.destroy();
+                const etiquetas = [...totalesMesPorCategoria.keys()];
+                chartGastoMensualCategorias = new Chart(canvasCategorias, {
+                    type: 'doughnut',
+                    data: {
+                        labels: etiquetas,
+                        datasets: [{
+                            data: etiquetas.map(nombre => totalesMesPorCategoria.get(nombre)),
+                            backgroundColor: etiquetas.map(colorCategoria),
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                display: etiquetas.length > 0,
+                                labels: { color: '#cbd5e1' }
+                            }
+                        }
+                    }
                 });
             }
 
-            const gastos = Array.isArray(window.appState.gastosMensuales) ? window.appState.gastosMensuales : [];
+            const canvasEvolucion = document.getElementById('chartGastoMensualEvolucion');
+            if (canvasEvolucion) {
+                if (chartGastoMensualEvolucion) chartGastoMensualEvolucion.destroy();
+                const totalesPorMes = meses.map(mes => gastos.reduce((suma, gasto) => (
+                    gasto.fecha && gasto.fecha.slice(0, 7) === mes.clave
+                        ? suma + (Number(gasto.monto) || 0)
+                        : suma
+                ), 0));
+                chartGastoMensualEvolucion = new Chart(canvasEvolucion, {
+                    type: 'bar',
+                    data: {
+                        labels: meses.map(mes => mes.etiqueta),
+                        datasets: [{
+                            label: 'Gastos Mensuales',
+                            data: totalesPorMes,
+                            backgroundColor: '#38bdf8',
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+                            y: { beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } }
+                        }
+                    }
+                });
+            }
+
+            const canvasEvolucionCategorias = document.getElementById('chartGastoMensualEvolucionCategorias');
+            if (canvasEvolucionCategorias) {
+                if (chartGastoMensualEvolucionCategorias) chartGastoMensualEvolucionCategorias.destroy();
+                const datasets = nombresCategorias.map(nombre => ({
+                    label: nombre,
+                    data: meses.map(mes => gastos.reduce((suma, gasto) => (
+                        gasto.fecha && gasto.fecha.slice(0, 7) === mes.clave && gasto.categoria === nombre
+                            ? suma + (Number(gasto.monto) || 0)
+                            : suma
+                    ), 0)),
+                    borderColor: colorCategoria(nombre),
+                    backgroundColor: colorCategoria(nombre),
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.3
+                }));
+                chartGastoMensualEvolucionCategorias = new Chart(canvasEvolucionCategorias, {
+                    type: 'line',
+                    data: {
+                        labels: meses.map(mes => mes.etiqueta),
+                        datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: datasets.length > 0,
+                                position: 'bottom',
+                                labels: { color: '#cbd5e1' }
+                            }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+                            y: { beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } }
+                        }
+                    }
+                });
+            }
+
+            renderGraficoGastoMensualPorUsuario(gastos, meses);
+        }
+
+        function renderGraficoGastoMensualPorUsuario(gastos, meses) {
+            const canvas = document.getElementById('chartGastoMensualUsuarios');
+            if (!canvas || typeof Chart === 'undefined') return;
             const totalesPorUsuario = new Map();
             gastos.forEach(gasto => {
                 if (!gasto.fecha) return;
@@ -2471,7 +2653,9 @@ window.ejecutarEliminacionGasto = function() {
                 if (mesIndice < 0) return;
 
                 const claveUsuario = gasto.usuarioUid || (gasto.usuarioEmail ? `email:${gasto.usuarioEmail.toLowerCase()}` : 'sin-identificar');
-                const nombreUsuario = gasto.usuarioEmail || (gasto.usuarioUid ? `Usuario ${gasto.usuarioUid.slice(0, 8)}` : 'Sin identificar');
+                const nombreUsuario = gasto.usuarioEmail
+                    ? gasto.usuarioEmail.split('@')[0]
+                    : (gasto.usuarioUid ? `Usuario ${gasto.usuarioUid.slice(0, 8)}` : 'Sin identificar');
                 if (!totalesPorUsuario.has(claveUsuario)) {
                     totalesPorUsuario.set(claveUsuario, {
                         nombre: nombreUsuario,
@@ -2565,24 +2749,55 @@ window.ejecutarEliminacionGasto = function() {
             renderGastoMensualApp();
         };
 
-        window.deleteGastoMensual = async function(id) {
+        window.deleteGastoMensual = function(id) {
             if (!esEditorGastoMensual()) {
                 window.mostrarMensajeApp('Acceso restringido', 'Tu permiso en este grupo es de solo lectura.', 'error');
                 return;
             }
-            if (!window.confirm('¿Eliminar este gasto mensual compartido?')) return;
-            const gastoAEliminar = (window.appState.gastosMensuales || []).find(gasto => gasto.id === id);
-            if (!gastoAEliminar) return;
+            gastoMensualPendienteDeEliminar = (window.appState.gastosMensuales || []).find(gasto => gasto.id === id) || null;
+            if (!gastoMensualPendienteDeEliminar) return;
+            document.getElementById('nombreGastoMensualAEliminar').textContent = gastoMensualPendienteDeEliminar.concepto || 'este gasto';
+            document.getElementById('errorEliminarGastoMensual').classList.add('hidden');
+            document.getElementById('modalConfirmarGastoMensual').classList.remove('hidden');
+        };
+
+        window.cerrarConfirmacionGastoMensual = function() {
+            document.getElementById('modalConfirmarGastoMensual').classList.add('hidden');
+            document.getElementById('errorEliminarGastoMensual').classList.add('hidden');
+            document.getElementById('btnConfirmarEliminarGastoMensual').disabled = false;
+            document.getElementById('btnConfirmarEliminarGastoMensual').textContent = 'Sí, eliminar';
+            gastoMensualPendienteDeEliminar = null;
+        };
+
+        window.confirmarEliminacionGastoMensual = async function() {
+            if (!esEditorGastoMensual()) {
+                window.mostrarMensajeApp('Acceso restringido', 'Tu permiso en este grupo es de solo lectura.', 'error');
+                window.cerrarConfirmacionGastoMensual();
+                return;
+            }
+            if (!gastoMensualPendienteDeEliminar) return;
+
+            const boton = document.getElementById('btnConfirmarEliminarGastoMensual');
+            const mensajeError = document.getElementById('errorEliminarGastoMensual');
+            boton.disabled = true;
+            boton.textContent = 'Eliminando...';
+            mensajeError.classList.add('hidden');
             try {
-                await window.eliminarGastoMensualCompartido(id);
+                await window.eliminarGastoMensualCompartido(gastoMensualPendienteDeEliminar.id);
             } catch (error) {
                 console.error('Error al eliminar el gasto mensual compartido:', error);
                 const detalle = error.code === 'permission-denied'
-                    ? 'Firestore rechazó la escritura por permisos. Revisá las reglas del grupo.'
-                    : 'Revisá tu conexión e intentá nuevamente.';
-                window.mostrarMensajeApp('No se pudo eliminar', `El gasto sigue guardado. ${detalle}`, 'error');
+                    ? 'Firestore rechazó el borrado por permisos. Verificá que tu usuario tenga permiso de escritura en este grupo y que las reglas de Firestore lo permitan.'
+                    : `No se pudo completar la operación (${error.code || 'error desconocido'}). Revisá la conexión e intentá nuevamente.`;
+                mensajeError.textContent = `El gasto sigue guardado. ${detalle}`;
+                mensajeError.classList.remove('hidden');
+                boton.disabled = false;
+                boton.textContent = 'Reintentar';
                 return;
             }
+            window.appState.gastosMensuales = (window.appState.gastosMensuales || [])
+                .filter(gasto => gasto.id !== gastoMensualPendienteDeEliminar.id);
+            window.cerrarConfirmacionGastoMensual();
             renderGastoMensualApp();
         };
 
