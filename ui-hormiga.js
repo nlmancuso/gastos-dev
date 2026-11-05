@@ -166,15 +166,75 @@
             }
         }
 
-        window.handleSaveGastoHormiga = function(e) {
+        let gastoHormigaPendienteDeEliminar = null;
+
+        async function guardarEstadoHormigaConManejoError(estadoAnterior) {
+            try {
+                await window.saveHormigaDataToCloud();
+                return true;
+            } catch (error) {
+                console.error('Error al guardar los gastos hormiga:', error);
+                window.hormigaState = estadoAnterior;
+                renderHormigaApp();
+                window.mostrarNotificacion('No se pudieron guardar los cambios', 'Revisá tu conexión e intentá nuevamente.', 'error');
+                return false;
+            }
+        }
+
+        window.handleSaveGastoHormiga = async function(e) {
             e.preventDefault();
             const concepto = document.getElementById('hormigaConcepto').value; const monto = parseFloat(document.getElementById('hormigaMonto').value);
             const fecha = document.getElementById('hormigaFecha').value; const categoria = document.getElementById('hormigaCategoriaSelect').value; const medioPago = document.getElementById('hormigaMedioPago').value;
             if (!concepto || !monto || !fecha) return;
+            const estadoAnterior = JSON.parse(JSON.stringify(window.hormigaState));
             window.hormigaState.gastos.push({ id: Date.now().toString(), concepto, monto, fecha, categoria, medioPago });
-            window.saveHormigaDataToCloud(); document.getElementById('hormigaConcepto').value = ''; document.getElementById('hormigaMonto').value = ''; renderHormigaApp();
+            renderHormigaApp();
+            if (!await guardarEstadoHormigaConManejoError(estadoAnterior)) return;
+            document.getElementById('hormigaConcepto').value = '';
+            document.getElementById('hormigaMonto').value = '';
         };
-        window.deleteGastoHormiga = function(id) { if (confirm('¿Eliminar este gasto hormiga?')) { window.hormigaState.gastos = window.hormigaState.gastos.filter(g => g.id !== id); window.saveHormigaDataToCloud(); renderHormigaApp(); } };
+        window.deleteGastoHormiga = function(id) {
+            gastoHormigaPendienteDeEliminar = (window.hormigaState.gastos || []).find(gasto => gasto.id === id) || null;
+            if (!gastoHormigaPendienteDeEliminar) return;
+            document.getElementById('nombreGastoHormigaAEliminar').textContent = gastoHormigaPendienteDeEliminar.concepto || 'este gasto';
+            document.getElementById('errorEliminarGastoHormiga').classList.add('hidden');
+            document.getElementById('modalConfirmarGastoHormiga').classList.remove('hidden');
+        };
+        window.cerrarConfirmacionGastoHormiga = function() {
+            document.getElementById('modalConfirmarGastoHormiga').classList.add('hidden');
+            document.getElementById('errorEliminarGastoHormiga').classList.add('hidden');
+            document.getElementById('btnConfirmarEliminarGastoHormiga').disabled = false;
+            document.getElementById('btnConfirmarEliminarGastoHormiga').textContent = 'Sí, eliminar';
+            document.getElementById('btnCancelarEliminarGastoHormiga').disabled = false;
+            gastoHormigaPendienteDeEliminar = null;
+        };
+        window.confirmarEliminacionGastoHormiga = async function() {
+            if (!gastoHormigaPendienteDeEliminar) return;
+            const boton = document.getElementById('btnConfirmarEliminarGastoHormiga');
+            const botonCancelar = document.getElementById('btnCancelarEliminarGastoHormiga');
+            const mensajeError = document.getElementById('errorEliminarGastoHormiga');
+            const estadoAnterior = JSON.parse(JSON.stringify(window.hormigaState));
+            boton.disabled = true;
+            botonCancelar.disabled = true;
+            boton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Eliminando...';
+            mensajeError.classList.add('hidden');
+            window.hormigaState.gastos = (window.hormigaState.gastos || []).filter(gasto => gasto.id !== gastoHormigaPendienteDeEliminar.id);
+            renderHormigaApp();
+            try {
+                await window.saveHormigaDataToCloud();
+            } catch (error) {
+                console.error('Error al eliminar el gasto hormiga:', error);
+                window.hormigaState = estadoAnterior;
+                renderHormigaApp();
+                mensajeError.textContent = 'No se pudo eliminar el gasto. Revisá la conexión e intentá nuevamente.';
+                mensajeError.classList.remove('hidden');
+                boton.disabled = false;
+                botonCancelar.disabled = false;
+                boton.textContent = 'Reintentar';
+                return;
+            }
+            window.cerrarConfirmacionGastoHormiga();
+        };
         window.openModalCatHormiga = function() { renderCatHormigaList(); document.getElementById('modalCatHormiga').classList.remove('hidden'); };
         function renderCatHormigaList() {
             const container = document.getElementById('listaCatHormigaConfig'); container.innerHTML = '';
@@ -182,20 +242,39 @@
                 container.innerHTML += `<div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800"><div class="flex items-center gap-2 flex-1"><input type="color" value="${cat.color}" onchange="actualizarCatHormigaCampo(${index}, 'color', this.value)" class="w-8 h-8 rounded bg-slate-900 border border-slate-800 cursor-pointer p-0.5"><input type="text" value="${cat.nombre}" onchange="actualizarCatHormigaCampo(${index}, 'nombre', this.value)" class="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-sm font-bold text-white"></div><button onclick="eliminarCatHormiga(${index})" class="text-rose-400 hover:text-rose-300 p-2" title="Eliminar"><i class="fa-solid fa-trash-can text-xs"></i></button></div>`;
             });
         }
-        window.actualizarCatHormigaCampo = function(index, campo, valor) {
+        window.actualizarCatHormigaCampo = async function(index, campo, valor) {
             if (!window.hormigaState.categorias[index]) return;
+            const estadoAnterior = JSON.parse(JSON.stringify(window.hormigaState));
             window.hormigaState.categorias[index][campo] = valor;
-            window.saveHormigaDataToCloud(); renderHormigaCategoriasSelect(); renderHormigaApp();
+            renderHormigaCategoriasSelect();
+            renderHormigaApp();
+            if (!await guardarEstadoHormigaConManejoError(estadoAnterior)) renderCatHormigaList();
         };
-        window.agregarCategoriaHormiga = function() {
+        window.agregarCategoriaHormiga = async function() {
             const nombre = document.getElementById('nuevaCatHormigaNombre').value.trim(); const color = document.getElementById('nuevaCatHormigaColor').value;
-            if (!nombre) return; window.hormigaState.categorias.push({ nombre, color });
-            document.getElementById('nuevaCatHormigaNombre').value = ''; window.saveHormigaDataToCloud(); renderCatHormigaList(); renderHormigaCategoriasSelect(); renderHormigaApp();
+            if (!nombre) return;
+            const estadoAnterior = JSON.parse(JSON.stringify(window.hormigaState));
+            window.hormigaState.categorias.push({ nombre, color });
+            renderCatHormigaList();
+            renderHormigaCategoriasSelect();
+            renderHormigaApp();
+            if (!await guardarEstadoHormigaConManejoError(estadoAnterior)) {
+                renderCatHormigaList();
+                return;
+            }
+            document.getElementById('nuevaCatHormigaNombre').value = '';
         };
-        window.eliminarCatHormiga = function(index) {
-            if (window.hormigaState.categorias.length <= 1) return alert("Mínimo una categoría.");
+        window.eliminarCatHormiga = async function(index) {
+            if (window.hormigaState.categorias.length <= 1) {
+                window.mostrarNotificacion('No se puede eliminar', 'Debe quedar al menos una categoría de Gasto Hormiga.', 'info');
+                return;
+            }
+            const estadoAnterior = JSON.parse(JSON.stringify(window.hormigaState));
             window.hormigaState.categorias.splice(index, 1);
-            window.saveHormigaDataToCloud(); renderCatHormigaList(); renderHormigaCategoriasSelect(); renderHormigaApp();
+            renderCatHormigaList();
+            renderHormigaCategoriasSelect();
+            renderHormigaApp();
+            if (!await guardarEstadoHormigaConManejoError(estadoAnterior)) renderCatHormigaList();
         };
 
         // ---------------- FUNCIONES DE MÁS / EXPANDIR GRÁFICOS ----------------
