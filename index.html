@@ -125,12 +125,12 @@ select option {
     </button>
     
     <!-- BOTÓN CONFIGURACIÓN DE CATEGORÍAS -->
-    <button id="btnConfigCat" onclick="openModalCatGeneral()" class="p-2.5 rounded-lg card-bg text-slate-400 hover:text-white transition" title="Configurar Categorías">
+    <button id="btnConfigCat" onclick="openSettingsSection('categorias')" class="p-2.5 rounded-lg card-bg text-slate-400 hover:text-white transition" title="Ajustes">
         <i class="fa-solid fa-gear text-sm"></i>
     </button>
     
     <!-- BOTÓN GESTIÓN DE GRUPO -->
-    <button id="btnGestionGrupo" onclick="openModalGestionGrupo()" class="p-2.5 rounded-lg card-bg text-slate-400 hover:text-emerald-400 transition" title="Gestión del Grupo Familiar">
+    <button id="btnGestionGrupo" onclick="openSettingsSection('grupo')" class="p-2.5 rounded-lg card-bg text-slate-400 hover:text-emerald-400 transition" title="Gestión del Grupo Familiar">
         <i class="fa-solid fa-users text-sm"></i>
     </button>
 
@@ -167,6 +167,41 @@ select option {
                 <button onclick="switchTab('hormiga')" id="btnTabHormiga" class="px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-white flex items-center gap-2 cursor-pointer"><i class="fa-solid fa-cookie-bite text-amber-400"></i> Gastos Hormiga <span class="bg-amber-500/20 text-amber-400 text-[10px] px-1.5 py-0.5 rounded font-mono">Privado</span></button>
             </div>
         </header>
+
+        <section id="viewSettings" class="hidden max-w-7xl mx-auto px-4 py-6">
+            <div class="mb-5">
+                <h2 class="text-xl font-bold text-white">Ajustes</h2>
+                <p class="mt-1 text-sm text-slate-400">Administrá categorías, subcategorías y el acceso al grupo.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)] gap-5">
+                <aside class="card-bg rounded-2xl p-3 h-fit space-y-1">
+                    <button id="btnSettingscategorias" onclick="switchSettingsSection('categorias')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-left">
+                        <i class="fa-solid fa-tags w-4"></i> Gestionar categorías
+                    </button>
+                    <button id="btnSettingssubcategorias" onclick="switchSettingsSection('subcategorias')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-left">
+                        <i class="fa-solid fa-layer-group w-4"></i> Gestionar subcategorías
+                    </button>
+                    <button id="btnSettingsgrupo" onclick="switchSettingsSection('grupo')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-left">
+                        <i class="fa-solid fa-users-gear w-4"></i> Gestión de grupo
+                    </button>
+                    <button id="btnSettingsnotificaciones" onclick="switchSettingsSection('notificaciones')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-left">
+                        <i class="fa-solid fa-bell w-4"></i> Notificaciones
+                    </button>
+                </aside>
+                <main id="settingsContent" class="min-w-0 space-y-4">
+                    <div id="settingsSectioncategorias" class="hidden"></div>
+                    <div id="settingsSectionsubcategorias" class="hidden"></div>
+                    <div id="settingsSectiongrupo" class="hidden"></div>
+                    <div id="settingsSectionnotificaciones" class="hidden card-bg rounded-2xl p-6">
+                        <h3 class="text-base font-bold text-white">Notificaciones</h3>
+                        <p class="mt-2 text-sm text-slate-400">El historial de notificaciones estará disponible en una próxima etapa. Por ahora, podés consultar las invitaciones nuevas desde la campanita.</p>
+                        <button onclick="toggleBandejaNotificaciones()" class="mt-4 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-semibold text-slate-200">
+                            <i class="fa-solid fa-bell mr-2"></i>Ver invitaciones nuevas
+                        </button>
+                    </div>
+                </main>
+            </div>
+        </section>
 
         <!-- ==================== SECCIÓN 1: PLANILLA ==================== -->
         <section id="viewPlanilla" class="max-w-7xl mx-auto px-4 py-4 space-y-6">
@@ -801,16 +836,35 @@ select option {
         </div>
     </div>
 
-    <!-- MODAL CATEGORÍAS GENERALES Y SUBCATEGORÍAS -->
-    <div id="modalCatGeneral" class="fixed inset-0 bg-slate-950/80 hidden flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-        <div class="card-bg rounded-2xl shadow-2xl max-w-lg w-full p-6 text-white border border-slate-700 relative flex flex-col max-h-[90vh]">
-            <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-3">
-                <h3 class="text-lg font-bold flex items-center gap-2 text-amber-400"><i class="fa-solid fa-tags"></i> Gestión de Categorías y Subcategorías</h3>
-                <button type="button" onclick="closeModal('modalCatGeneral')" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+    <!-- CONTENIDO DE AJUSTES: CATEGORÍAS Y SUBCATEGORÍAS -->
+    <div id="modalCatGeneral" class="hidden w-full">
+        <div id="settingsCategoriasCard" class="card-bg rounded-2xl shadow-xl w-full p-6 text-white border border-slate-700">
+            <div id="settingsCategoriasPanelContent" class="hidden">
+                <div class="mb-5 border-b border-slate-800 pb-3">
+                    <h3 class="text-lg font-bold flex items-center gap-2 text-amber-400"><i class="fa-solid fa-tags"></i> Gestionar categorías</h3>
+                    <p class="mt-1 text-xs text-slate-400">Definí las categorías que organizan los gastos de la planilla.</p>
+                </div>
+                <div class="space-y-3 mb-4 bg-slate-900 p-3.5 rounded-xl border border-slate-800">
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="nuevaCatGenNombre" placeholder="Nueva categoría..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none">
+                        <input type="color" id="nuevaCatGenColor" value="#3b82f6" class="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer p-1">
+                        <button onclick="agregarCategoriaGeneral()" class="w-10 h-10 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-md transition"><i class="fa-solid fa-plus text-base"></i></button>
+                    </div>
+                    <div class="flex items-center gap-2 pt-1">
+                        <input type="checkbox" id="nuevaCatGenBloque" class="w-4 h-4 rounded border-slate-700 bg-slate-950 text-emerald-600 cursor-pointer">
+                        <label for="nuevaCatGenBloque" class="text-xs text-slate-300 font-semibold cursor-pointer">¿Es tarjeta o comparte vencimiento único en bloque?</label>
+                    </div>
+                </div>
+                <div id="listaCatGeneralConfig" class="space-y-3 overflow-y-auto pr-1 max-h-[60vh]"></div>
             </div>
 
-            <!-- PANEL AUMENTO MASIVO POR SUBCATEGORÍA -->
-            <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 mb-4 space-y-3">
+            <div id="settingsSubcategoriasPanelContent" class="hidden">
+                <div class="mb-5 border-b border-slate-800 pb-3">
+                    <h3 class="text-lg font-bold flex items-center gap-2 text-amber-400"><i class="fa-solid fa-layer-group"></i> Gestionar subcategorías</h3>
+                    <p class="mt-1 text-xs text-slate-400">Configurá subcategorías y su aumento masivo para gastos recurrentes.</p>
+                </div>
+                <!-- PANEL AUMENTO MASIVO POR SUBCATEGORÍA -->
+                <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 mb-4 space-y-3">
                 <h4 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5"><i class="fa-solid fa-sliders"></i> Aumento Masivo por Subcategoría</h4>
                 <div class="flex items-center gap-2">
                     <input type="text" id="nuevaSubcatNombre" placeholder="Subcategoría (ej: Alquileres...)" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
@@ -819,19 +873,7 @@ select option {
                 </div>
                 <div id="listaSubcatGeneralConfig" class="space-y-2 pt-2 max-h-36 overflow-y-auto pr-1"></div>
             </div>
-
-            <div class="space-y-3 mb-4 bg-slate-900 p-3.5 rounded-xl border border-slate-800">
-                <div class="flex items-center gap-2">
-                    <input type="text" id="nuevaCatGenNombre" placeholder="Nueva categoría..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none">
-                    <input type="color" id="nuevaCatGenColor" value="#3b82f6" class="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer p-1">
-                    <button onclick="agregarCategoriaGeneral()" class="w-10 h-10 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-md transition"><i class="fa-solid fa-plus text-base"></i></button>
-                </div>
-                <div class="flex items-center gap-2 pt-1">
-                    <input type="checkbox" id="nuevaCatGenBloque" class="w-4 h-4 rounded border-slate-700 bg-slate-950 text-emerald-600 cursor-pointer">
-                    <label for="nuevaCatGenBloque" class="text-xs text-slate-300 font-semibold cursor-pointer">¿Es tarjeta o comparte vencimiento único en bloque?</label>
-                </div>
             </div>
-            <div id="listaCatGeneralConfig" class="space-y-3 overflow-y-auto pr-1 max-h-72"></div>
         </div>
     </div>
 
@@ -1029,13 +1071,18 @@ select option {
     </div>
 </div>
 <!-- MODAL GESTIÓN DE GRUPO Y MIEMBROS (MULTI-USUARIO) -->
-<div id="modalGestionGrupo" class="fixed inset-0 bg-slate-950/80 hidden flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-    <div class="card-bg rounded-2xl shadow-2xl max-w-lg w-full p-6 text-white border border-slate-700 relative flex flex-col max-h-[90vh]">
-        <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-3">
+<div id="modalGestionGrupo" class="hidden w-full">
+    <div class="card-bg rounded-2xl shadow-xl w-full p-6 text-white border border-slate-700 relative flex flex-col">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 border-b border-slate-800 pb-3">
+            <div>
             <h3 class="text-base font-bold text-emerald-400 flex items-center gap-2">
                 <i class="fa-solid fa-users-gear"></i> Gestión del Grupo Familiar
             </h3>
-            <button type="button" onclick="closeModal('modalGestionGrupo')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            <p class="mt-1 text-xs text-slate-400">Administrá integrantes, permisos e invitaciones del grupo.</p>
+            </div>
+            <button type="button" onclick="toggleBandejaNotificaciones()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200">
+                <i class="fa-solid fa-inbox mr-1.5"></i>Invitaciones recibidas
+            </button>
         </div>
 
         <div class="space-y-4 overflow-y-auto pr-1">
@@ -1072,9 +1119,6 @@ select option {
             </div>
         </div>
 
-        <div class="flex justify-end pt-4 mt-2 border-t border-slate-800">
-            <button type="button" onclick="closeModal('modalGestionGrupo')" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-700">Cerrar</button>
-        </div>
     </div>
 </div>
     <!-- Modal Personalizado para Mensajes y Notificaciones -->
