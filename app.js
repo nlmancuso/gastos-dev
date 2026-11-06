@@ -1437,9 +1437,7 @@ window.ejecutarEliminacionGasto = function() {
 };
 
 window.openModalGestionGrupo = function() {
-    renderMiembrosGrupo();
-    const modal = document.getElementById('modalGestionGrupo');
-    if (modal) modal.classList.remove('hidden');
+    window.openSettingsSection('grupo');
 };
 
 function renderMiembrosGrupo() {
@@ -1463,7 +1461,6 @@ function renderMiembrosGrupo() {
             invitacionesPendientes: []
         };
     }
-
     const grupoInfo = window.appState.grupoInfo;
     const esAdmin = userEmail === "nicolaslmancuso@gmail.com" || grupoInfo.adminUid === userUid;
 
@@ -1520,6 +1517,7 @@ function renderMiembrosGrupo() {
         containerPendientes.classList.add('hidden');
     }
 }
+window.renderMiembrosGrupoSettings = renderMiembrosGrupo;
 
 window.handleInvitarMiembro = async function(e) {
     if (e) e.preventDefault();
