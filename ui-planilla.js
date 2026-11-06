@@ -263,10 +263,13 @@
             window.saveDataToCloud(); renderApp();
         };
 
-        window.openModalCatGeneral = function() { 
+        window.renderSettingsCategories = function() {
             renderCatGeneralList(); 
             renderSubcatList();
-            document.getElementById('modalCatGeneral').classList.remove('hidden'); 
+        };
+
+        window.openModalCatGeneral = function() {
+            window.openSettingsSection('categorias');
         };
 
         function renderCatGeneralList() {
@@ -699,4 +702,3 @@ window.ejecutarEliminacionGasto = function() {
 };
 
         window.closeModal = function(id) { document.getElementById(id).classList.add('hidden'); };
-
